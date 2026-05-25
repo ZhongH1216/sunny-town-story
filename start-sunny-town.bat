@@ -3,6 +3,7 @@ setlocal
 
 set "ROOT=%~dp0"
 set "URL=http://127.0.0.1:8765"
+set "PYTHON=D:\python\anaconda\envs\aigo\python.exe"
 
 cd /d "%ROOT%"
 
@@ -20,16 +21,21 @@ call npm.cmd install
 if errorlevel 1 goto install_failed
 
 :launch
-node tools\start-server.js
-if errorlevel 1 goto launch_failed
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8765" ^| findstr "LISTENING"') do (
+  echo Stopping old server process %%P...
+  taskkill /PID %%P /F >nul 2>nul
+)
 
+echo Opening browser in a moment: %URL%
+start "" powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 1; Start-Process '%URL%'"
 echo.
-echo Opening %URL%
-start "" "%URL%"
+echo Keep this window open while playing.
+echo To stop the game, close this window or press Ctrl+C.
+echo If a server is stuck, use stop-sunny-town.bat.
 echo.
-echo The server is running in the background.
-echo You can double-click this launcher again to reopen the game.
+"%PYTHON%" app.py --host 127.0.0.1 --port 8765
 echo.
+echo Sunny Town Story has stopped.
 pause
 exit /b 0
 
@@ -43,13 +49,6 @@ exit /b 1
 :install_failed
 echo.
 echo npm install failed. Please check your network or npm setup.
-echo.
-pause
-exit /b 1
-
-:launch_failed
-echo.
-echo Launch failed. Please check server.err.log.
 echo.
 pause
 exit /b 1

@@ -174,8 +174,8 @@ npm.cmd run serve
 - 自动切换到项目根目录
 - 检查 Node.js
 - 如果缺少 `node_modules`，自动执行 `npm.cmd install`
-- 调用 `node tools\start-server.js` 后台启动服务
 - 自动打开 `http://127.0.0.1:8765`
+- 前台运行 `app.py`，窗口关闭或 `Ctrl+C` 后服务随之结束
 - 启动失败时停在窗口里显示错误，避免双击后窗口瞬间消失
 
 实现注意：
@@ -183,6 +183,7 @@ npm.cmd run serve
 - 真实逻辑放在纯 ASCII 的 `start-sunny-town.bat`。
 - `启动阳光小镇.bat` 只负责 `call start-sunny-town.bat`。
 - 不要把复杂中文提示写进 `.bat` 的括号代码块里；cmd 在不同代码页下容易把 UTF-8 中文拆成半截命令。
+- `stop-sunny-town.bat` / `停止阳光小镇.bat` 用于结束旧版后台服务或清理占用 `8765` 端口的进程。
 
 ## 数据结构摘要
 

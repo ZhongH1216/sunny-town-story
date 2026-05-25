@@ -6,4 +6,5 @@ __pycache__/
 debug.log
 server.out.log
 server.err.log
+server.pid
 .env

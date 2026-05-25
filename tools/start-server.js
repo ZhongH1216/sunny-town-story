@@ -6,6 +6,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const python = "D:\\python\\anaconda\\envs\\aigo\\python.exe";
 const url = "http://127.0.0.1:8765";
+const pidFile = path.join(root, "server.pid");
 
 function probe() {
   return new Promise((resolve) => {
@@ -33,6 +34,7 @@ async function waitForServer(deadlineMs = 8000) {
 async function main() {
   if (await probe()) {
     console.log(`Already running at ${url}`);
+    console.log("Use stop-sunny-town.bat to stop the local server.");
     return;
   }
 
@@ -53,6 +55,8 @@ async function main() {
 
   console.log(`Started Sunny Town Story at ${url}`);
   console.log(`PID ${child.pid}`);
+  fs.writeFileSync(pidFile, `${child.pid}\n`, "utf8");
+  console.log("Use stop-sunny-town.bat to stop the local server.");
 }
 
 main().catch((error) => {
