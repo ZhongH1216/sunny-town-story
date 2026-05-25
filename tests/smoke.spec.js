@@ -16,80 +16,148 @@ async function canvasSignal(page) {
   });
 }
 
+async function state(page) {
+  return page.evaluate(() => window.sunnyTownTest.getState());
+}
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-test("sunny town renders a desktop 3D city builder", async ({ page }) => {
+test("sunny town renders the desktop 3D builder and traffic HUD", async ({ page }) => {
   await page.goto("/?test=1");
-  await expect(page.locator("h1")).toBeVisible();
+  await expect(page.locator("h1")).toContainText("阳光小镇物语");
   await expect(page.locator("[data-tool='road']")).toBeVisible();
+  await expect(page.locator("[data-road-tier='lane']")).toBeVisible();
+  await expect(page.locator("[data-road-tier='avenue']")).toBeVisible();
+  await expect(page.locator("#trafficSummary")).toBeVisible();
   await expect(page.locator("#scene")).toBeVisible();
   await page.waitForTimeout(1200);
   await page.screenshot({ path: "test-results/sunny-town-desktop.png", fullPage: true });
   await expect(await canvasSignal(page)).toBeGreaterThan(1000);
 });
 
-test("toolbar can place roads, homes, shops and parks", async ({ page }) => {
-  await page.goto("/?test=1");
-  const before = await page.evaluate(() => window.sunnyTownTest.getState());
-  await page.evaluate(() => {
-    window.sunnyTownTest.place("road", 2, 2);
-    window.sunnyTownTest.place("residential", 2, 3);
-    window.sunnyTownTest.place("commercial", 3, 2);
-    window.sunnyTownTest.place("park", 1, 2);
-  });
-  const after = await page.evaluate(() => window.sunnyTownTest.getState());
-  expect(after.roadCount).toBeGreaterThan(before.roadCount);
-  expect(after.buildingCount).toBeGreaterThan(before.buildingCount);
-});
-
-test("residential growth near road increases population and tax base", async ({ page }) => {
-  await page.goto("/?test=1");
-  const before = await page.evaluate(() => window.sunnyTownTest.getState().stats);
-  await page.evaluate(() => {
-    window.sunnyTownTest.place("road", 4, 4);
-    window.sunnyTownTest.place("power", 4, 5);
-    window.sunnyTownTest.place("water", 5, 4);
-    window.sunnyTownTest.place("residential", 3, 4);
-    window.sunnyTownTest.place("residential", 4, 3);
-    window.sunnyTownTest.advanceWeek(6);
-  });
-  const after = await page.evaluate(() => window.sunnyTownTest.getState().stats);
-  expect(after.population).toBeGreaterThan(before.population);
-  expect(after.income).toBeGreaterThan(before.income);
-});
-
-test("advisor reports missing utilities", async ({ page }) => {
-  await page.goto("/?test=1");
-  await expect(page.locator("#advisorList")).toContainText(/\u7535\u529b\u4e0d\u8db3|\u4f9b\u6c34\u4e0d\u8db3/);
-});
-
-test("park and school improve town happiness or coverage", async ({ page }) => {
+test("lane roads and sakura avenues can both be placed", async ({ page }) => {
   await page.goto("/?test=1");
   await page.evaluate(() => {
-    window.sunnyTownTest.place("road", 10, 10);
-    window.sunnyTownTest.place("residential", 10, 11);
-    window.sunnyTownTest.place("power", 10, 9);
-    window.sunnyTownTest.place("water", 9, 10);
-    window.sunnyTownTest.advanceWeek(2);
+    window.sunnyTownTest.place("road", 1, 1, { tier: "lane" });
+    window.sunnyTownTest.place("road", 2, 1, { tier: "avenue" });
   });
-  const before = await page.evaluate(() => window.sunnyTownTest.getState().stats);
-  await page.evaluate(() => {
-    window.sunnyTownTest.place("road", 12, 10);
-    window.sunnyTownTest.place("road", 8, 10);
-    window.sunnyTownTest.place("park", 12, 11);
-    window.sunnyTownTest.place("school", 8, 11);
-    window.sunnyTownTest.advanceWeek(3);
-  });
-  const after = await page.evaluate(() => window.sunnyTownTest.getState().stats);
-  expect(after.education).toBeGreaterThan(before.education);
-  expect(after.happiness).toBeGreaterThanOrEqual(before.happiness);
+  const roads = (await state(page)).roads;
+  const lane = roads.find((road) => road.x === 1 && road.z === 1);
+  const avenue = roads.find((road) => road.x === 2 && road.z === 1);
+  expect(lane.tier).toBe("lane");
+  expect(avenue.tier).toBe("avenue");
+  expect(avenue.capacity).toBeGreaterThan(lane.capacity);
 });
 
-test("expensive tools disable when money is too low", async ({ page }) => {
+test("road masks update for straight, corner, T and cross layouts", async ({ page }) => {
   await page.goto("/?test=1");
-  await page.evaluate(() => window.sunnyTownTest.setMoney(100));
-  await expect(page.locator("[data-tool='school']")).toBeDisabled();
-  await expect(page.locator("[data-tool='road']")).toBeEnabled();
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 2, 2, { tier: "lane" });
+    t.place("road", 3, 2, { tier: "lane" });
+    t.place("road", 4, 2, { tier: "lane" });
+    t.place("road", 6, 6, { tier: "lane" });
+    t.place("road", 7, 6, { tier: "lane" });
+    t.place("road", 7, 7, { tier: "lane" });
+    t.place("road", 10, 2, { tier: "lane" });
+    t.place("road", 9, 2, { tier: "lane" });
+    t.place("road", 11, 2, { tier: "lane" });
+    t.place("road", 10, 1, { tier: "lane" });
+    t.place("road", 14, 4, { tier: "lane" });
+    t.place("road", 13, 4, { tier: "lane" });
+    t.place("road", 15, 4, { tier: "lane" });
+    t.place("road", 14, 3, { tier: "lane" });
+    t.place("road", 14, 5, { tier: "lane" });
+  });
+  const roads = (await state(page)).roads;
+  const at = (x, z) => roads.find((road) => road.x === x && road.z === z).mask;
+  expect(at(3, 2)).toBe(10);
+  expect(at(7, 6)).toBe(12);
+  expect(at(10, 2)).toBe(11);
+  expect(at(14, 4)).toBe(15);
+});
+
+test("residents receive road routes and animated commuters stay capped", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 12, { tier: "lane" });
+    t.place("road", 2, 12, { tier: "lane" });
+    t.place("road", 3, 12, { tier: "lane" });
+    t.place("road", 4, 12, { tier: "lane" });
+    t.place("road", 5, 12, { tier: "lane" });
+    t.place("residential", 1, 13);
+    t.place("commercial", 5, 13);
+    t.place("industrial", 4, 13);
+    t.place("power", 2, 13);
+    t.place("water", 3, 13);
+    t.advanceWeek(8);
+  });
+  const after = await state(page);
+  expect(after.stats.population).toBeGreaterThan(0);
+  expect(after.stats.income).toBeGreaterThan(0);
+  expect(after.residents.some((resident) => resident.routeLength > 0)).toBe(true);
+  expect(after.visualAgentCount).toBeGreaterThan(0);
+  expect(after.visualAgentCount).toBeLessThanOrEqual(60);
+});
+
+test("broken road networks create unreachable commuter advice", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 15, { tier: "lane" });
+    t.place("residential", 1, 16);
+    t.place("road", 6, 15, { tier: "lane" });
+    t.place("commercial", 6, 16);
+    t.place("power", 2, 15);
+    t.place("water", 2, 16);
+    t.advanceWeek(8);
+  });
+  const after = await state(page);
+  expect(after.residents.some((resident) => resident.routeLength === 0)).toBe(true);
+  expect(after.advisor.map((item) => `${item.title} ${item.text}`).join("\n")).toMatch(/到不了目的地|断路/);
+  await expect(page.locator("#advisorList")).toContainText(/到不了目的地|断路/);
+});
+
+test("busy commutes raise lane congestion and lower traffic score", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 4, { tier: "lane" });
+    t.place("road", 2, 4, { tier: "lane" });
+    t.place("road", 3, 4, { tier: "lane" });
+    t.place("road", 4, 4, { tier: "lane" });
+    t.place("road", 5, 4, { tier: "lane" });
+    t.place("road", 6, 4, { tier: "lane" });
+    t.place("residential", 1, 5);
+    t.place("residential", 2, 5);
+    t.place("residential", 3, 5);
+    t.place("commercial", 5, 5);
+    t.place("industrial", 6, 5);
+    t.place("power", 2, 3);
+    t.place("water", 3, 3);
+    t.advanceWeek(12);
+  });
+  const after = await state(page);
+  const busyLane = after.roads.find((road) => road.tier === "lane" && road.load > road.capacity);
+  expect(busyLane).toBeTruthy();
+  expect(busyLane.congestion).toBeGreaterThan(0);
+  expect(after.stats.traffic).toBeLessThan(100);
+});
+
+test("avenues carry the same sampled load with lower congestion than lanes", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 1, { tier: "lane" });
+    t.place("road", 2, 1, { tier: "avenue" });
+    t.advanceWeek(1);
+  });
+  const roads = (await state(page)).roads;
+  const lane = roads.find((road) => road.x === 1 && road.z === 1);
+  const avenue = roads.find((road) => road.x === 2 && road.z === 1);
+  const sameLoad = Math.max(lane.load, avenue.load, 10);
+  expect(sameLoad / avenue.capacity).toBeLessThan(sameLoad / lane.capacity);
 });

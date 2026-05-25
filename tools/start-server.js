@@ -51,7 +51,7 @@ async function main() {
     throw new Error("Server process started but did not become reachable.");
   }
 
-  console.log(`Started Neon Grid Command Center at ${url}`);
+  console.log(`Started Sunny Town Story at ${url}`);
   console.log(`PID ${child.pid}`);
 }
 

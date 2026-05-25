@@ -29,11 +29,17 @@
       <aside class="build-panel" aria-label="建造工具">
         <div class="panel-title">
           <span>建造工具</span>
-          <small id="toolCost">道路 ¥80</small>
+          <small id="toolCost">普通道路 ¥80</small>
         </div>
+
+        <section class="road-mode" aria-label="道路类型">
+          <button class="road-tier active" data-road-tier="lane" type="button">普通道路</button>
+          <button class="road-tier" data-road-tier="avenue" type="button">樱花大道</button>
+        </section>
+
         <div class="tool-grid">
-          <button class="tool-button active" data-tool="road" type="button"><span>路</span><strong>道路</strong><small>连接建筑</small></button>
-          <button class="tool-button" data-tool="residential" type="button"><span>家</span><strong>住宅</strong><small>吸引居民</small></button>
+          <button class="tool-button active" data-tool="road" type="button"><span>路</span><strong>道路</strong><small>自动连接</small></button>
+          <button class="tool-button" data-tool="residential" type="button"><span>家</span><strong>住宅</strong><small>独立居民</small></button>
           <button class="tool-button" data-tool="commercial" type="button"><span>店</span><strong>商业</strong><small>消费就业</small></button>
           <button class="tool-button" data-tool="industrial" type="button"><span>工</span><strong>工业</strong><small>岗位税收</small></button>
           <button class="tool-button" data-tool="park" type="button"><span>花</span><strong>公园</strong><small>提升幸福</small></button>
@@ -41,7 +47,7 @@
           <button class="tool-button" data-tool="fire" type="button"><span>防</span><strong>消防站</strong><small>降低风险</small></button>
           <button class="tool-button" data-tool="power" type="button"><span>电</span><strong>电力</strong><small>供电设施</small></button>
           <button class="tool-button" data-tool="water" type="button"><span>水</span><strong>水塔</strong><small>供水设施</small></button>
-          <button class="tool-button danger" data-tool="bulldoze" type="button"><span>拆</span><strong>拆除</strong><small>退回少量资金</small></button>
+          <button class="tool-button danger" data-tool="bulldoze" type="button"><span>拆</span><strong>拆除</strong><small>返还资金</small></button>
         </div>
       </aside>
 
@@ -54,6 +60,11 @@
           <span id="cityMood">开局规划</span>
           <strong id="goalTitle">目标：打造阳光小镇</strong>
           <p id="goalText">人口达到 800、幸福度 75%、资金保持为正，即可完成第一阶段建设。</p>
+        </section>
+        <section class="traffic-card">
+          <span>交通网络</span>
+          <strong id="trafficSummary">道路通畅</strong>
+          <p id="trafficDetails">居民会沿道路通勤；拥堵会降低幸福度和税收效率。</p>
         </section>
         <section class="advisor-list" id="advisorList" aria-live="polite"></section>
         <section class="selection-card">
@@ -75,7 +86,7 @@
         </section>
         <section class="tool-hint">
           <span id="currentTool">当前：道路</span>
-          <p id="hintText">点击草地铺路。建筑必须贴近道路才会运行。</p>
+          <p id="hintText">选择道路等级后点击草地铺路。建筑必须贴近道路才会运行。</p>
         </section>
       </footer>
     </main>
