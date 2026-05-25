@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>阳光小镇物语</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="阳光小镇 3D 建造地图"></canvas>
+
+    <main class="game-shell">
+      <header class="top-hud">
+        <section class="brand">
+          <p>HARU HARBOR / 晴日建设课</p>
+          <h1>阳光小镇物语</h1>
+        </section>
+        <section class="city-stats" aria-label="城市状态">
+          <div><span>资金</span><strong id="money">¥50,000</strong></div>
+          <div><span>人口</span><strong id="population">0 / 0</strong></div>
+          <div><span>幸福度</span><strong id="happiness">68%</strong></div>
+          <div><span>就业率</span><strong id="employment">0%</strong></div>
+          <div><span>交通</span><strong id="traffic">100%</strong></div>
+          <div><span>电力</span><strong id="power">0%</strong></div>
+          <div><span>水力</span><strong id="water">0%</strong></div>
+        </section>
+      </header>
+
+      <aside class="build-panel" aria-label="建造工具">
+        <div class="panel-title">
+          <span>建造工具</span>
+          <small id="toolCost">道路 ¥80</small>
+        </div>
+        <div class="tool-grid">
+          <button class="tool-button active" data-tool="road" type="button"><span>路</span><strong>道路</strong><small>连接建筑</small></button>
+          <button class="tool-button" data-tool="residential" type="button"><span>家</span><strong>住宅</strong><small>吸引居民</small></button>
+          <button class="tool-button" data-tool="commercial" type="button"><span>店</span><strong>商业</strong><small>消费就业</small></button>
+          <button class="tool-button" data-tool="industrial" type="button"><span>工</span><strong>工业</strong><small>岗位税收</small></button>
+          <button class="tool-button" data-tool="park" type="button"><span>花</span><strong>公园</strong><small>提升幸福</small></button>
+          <button class="tool-button" data-tool="school" type="button"><span>学</span><strong>学校</strong><small>教育覆盖</small></button>
+          <button class="tool-button" data-tool="fire" type="button"><span>防</span><strong>消防站</strong><small>降低风险</small></button>
+          <button class="tool-button" data-tool="power" type="button"><span>电</span><strong>电力</strong><small>供电设施</small></button>
+          <button class="tool-button" data-tool="water" type="button"><span>水</span><strong>水塔</strong><small>供水设施</small></button>
+          <button class="tool-button danger" data-tool="bulldoze" type="button"><span>拆</span><strong>拆除</strong><small>退回少量资金</small></button>
+        </div>
+      </aside>
+
+      <aside class="advisor-panel" aria-label="城市顾问">
+        <div class="panel-title">
+          <span>城市顾问</span>
+          <small id="weekLabel">第 1 周</small>
+        </div>
+        <section class="goal-card" id="goalCard">
+          <span id="cityMood">开局规划</span>
+          <strong id="goalTitle">目标：打造阳光小镇</strong>
+          <p id="goalText">人口达到 800、幸福度 75%、资金保持为正，即可完成第一阶段建设。</p>
+        </section>
+        <section class="advisor-list" id="advisorList" aria-live="polite"></section>
+        <section class="selection-card">
+          <span>当前格子</span>
+          <strong id="selectedTitle">未选择</strong>
+          <p id="selectedInfo">点击地图格子来建造、查看或拆除。</p>
+        </section>
+        <section class="weekly-report">
+          <span>周报</span>
+          <p id="weeklyReport">欢迎来到晴日港。先铺道路，再建住宅和基础设施吧。</p>
+        </section>
+      </aside>
+
+      <footer class="bottom-bar">
+        <section class="time-controls">
+          <button id="pauseButton" type="button">暂停</button>
+          <button id="speedButton" type="button">速度 x1</button>
+          <strong id="calendar">春季 第 1 周</strong>
+        </section>
+        <section class="tool-hint">
+          <span id="currentTool">当前：道路</span>
+          <p id="hintText">点击草地铺路。建筑必须贴近道路才会运行。</p>
+        </section>
+      </footer>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
