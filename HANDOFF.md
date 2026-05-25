@@ -165,7 +165,7 @@ Started Sunny Town Story at http://127.0.0.1:8765
 npm.cmd run serve
 ```
 
-### `启动阳光小镇.bat`
+### `start-sunny-town.bat` / `启动阳光小镇.bat`
 
 给用户双击使用的一键启动入口。
 
@@ -177,6 +177,12 @@ npm.cmd run serve
 - 调用 `node tools\start-server.js` 后台启动服务
 - 自动打开 `http://127.0.0.1:8765`
 - 启动失败时停在窗口里显示错误，避免双击后窗口瞬间消失
+
+实现注意：
+
+- 真实逻辑放在纯 ASCII 的 `start-sunny-town.bat`。
+- `启动阳光小镇.bat` 只负责 `call start-sunny-town.bat`。
+- 不要把复杂中文提示写进 `.bat` 的括号代码块里；cmd 在不同代码页下容易把 UTF-8 中文拆成半截命令。
 
 ## 数据结构摘要
 
@@ -344,7 +350,7 @@ window.sunnyTownTest.getState();
 运行：
 
 ```powershell
-.\启动阳光小镇.bat
+.\start-sunny-town.bat
 ```
 
 或：
