@@ -165,6 +165,19 @@ Started Sunny Town Story at http://127.0.0.1:8765
 npm.cmd run serve
 ```
 
+### `启动阳光小镇.bat`
+
+给用户双击使用的一键启动入口。
+
+职责：
+
+- 自动切换到项目根目录
+- 检查 Node.js
+- 如果缺少 `node_modules`，自动执行 `npm.cmd install`
+- 调用 `node tools\start-server.js` 后台启动服务
+- 自动打开 `http://127.0.0.1:8765`
+- 启动失败时停在窗口里显示错误，避免双击后窗口瞬间消失
+
 ## 数据结构摘要
 
 地块 `city.tiles[]`：
@@ -329,6 +342,12 @@ window.sunnyTownTest.getState();
 ## 常用命令
 
 运行：
+
+```powershell
+.\启动阳光小镇.bat
+```
+
+或：
 
 ```powershell
 cd "D:\Pycharm project\cool"

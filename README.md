@@ -142,6 +142,16 @@ npx.cmd playwright install chromium
 
 ## 本地运行
 
+最简单的方式：在项目根目录双击：
+
+```text
+启动阳光小镇.bat
+```
+
+它会自动进入项目目录，首次运行时安装 npm 依赖，启动本地服务，并打开浏览器访问游戏。
+
+命令行方式：
+
 ```powershell
 cd "D:\Pycharm project\cool"
 npm.cmd run serve
@@ -158,6 +168,8 @@ http://127.0.0.1:8765
 ```powershell
 npm.cmd start
 ```
+
+`npm.cmd start` 会在后台启动服务，但不会自动打开浏览器；双击 `.bat` 文件会自动打开。
 
 ## 测试
 
