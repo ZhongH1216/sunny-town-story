@@ -510,6 +510,37 @@ function trend(current, previous) {
   };
 }
 
+function impactItem(id, label, value, kind) {
+  return { id, label, value: Math.round(value * 10) / 10, kind };
+}
+
+function buildResidentNeeds({
+  power,
+  water,
+  employmentRate,
+  traffic,
+  education,
+  fire,
+  park,
+  culture,
+  transport,
+  pollution,
+  routeStats,
+}) {
+  const needs = [];
+  if (power < 80) needs.push({ id: "power", title: "电力不稳", detail: `供电覆盖 ${Math.round(power)}%，会拖慢入住和商业效率。`, severity: 100 - power });
+  if (water < 80) needs.push({ id: "water", title: "供水不足", detail: `供水覆盖 ${Math.round(water)}%，住宅容量没有完全释放。`, severity: 100 - water });
+  if (employmentRate < 78 && city.stats.population > 0) needs.push({ id: "employment", title: "岗位不足", detail: `就业率 ${Math.round(employmentRate)}%，需要更多可达商业或工业。`, severity: 78 - employmentRate });
+  if (traffic < 70) needs.push({ id: "traffic", title: "通勤吃力", detail: `交通评分 ${Math.round(traffic)}%，道路升级和车站能缓解压力。`, severity: 70 - traffic + routeStats.unreachableResidents });
+  if (education < 35 && city.stats.population > 160) needs.push({ id: "education", title: "教育覆盖低", detail: `教育覆盖 ${Math.round(education)}%，住宅升级会更困难。`, severity: 35 - education });
+  if (fire < 35 && city.stats.population > 240) needs.push({ id: "fire", title: "消防安心感不足", detail: `消防覆盖 ${Math.round(fire)}%，中型城镇需要安全网。`, severity: 35 - fire });
+  if (park < 25 && city.stats.population > 120) needs.push({ id: "park", title: "休闲空间不足", detail: `公园覆盖 ${Math.round(park)}%，居民缺少日常放松空间。`, severity: 25 - park });
+  if (culture < 25 && city.chapterIndex >= 1) needs.push({ id: "culture", title: "街区氛围不足", detail: `文化覆盖 ${Math.round(culture)}%，地标和祭典灯能提升归属感。`, severity: 25 - culture });
+  if (transport < 18 && city.chapterIndex >= 3) needs.push({ id: "transport", title: "通勤节点不足", detail: `通勤服务 ${Math.round(transport)}%，小车站适合放在主干路旁。`, severity: 18 - transport });
+  if (pollution > 24) needs.push({ id: "pollution", title: "污染靠近住宅", detail: `住宅平均污染 ${Math.round(pollution)}，工业区需要隔离或公园缓冲。`, severity: pollution - 24 });
+  return needs.sort((a, b) => b.severity - a.severity).slice(0, 4);
+}
+
 const els = {
   money: document.querySelector("#money"),
   population: document.querySelector("#population"),
@@ -526,6 +557,8 @@ const els = {
   goalText: document.querySelector("#goalText"),
   trafficSummary: document.querySelector("#trafficSummary"),
   trafficDetails: document.querySelector("#trafficDetails"),
+  needsSummary: document.querySelector("#needsSummary"),
+  happinessBreakdown: document.querySelector("#happinessBreakdown"),
   advisorList: document.querySelector("#advisorList"),
   selectedTitle: document.querySelector("#selectedTitle"),
   selectedInfo: document.querySelector("#selectedInfo"),
@@ -630,7 +663,11 @@ const city = {
     water: 0,
     education: 0,
     fire: 0,
+    culture: 0,
+    transport: 0,
     pollution: 0,
+    happinessReasons: [],
+    residentNeeds: [],
   },
   messages: ["欢迎来到晴日港。先铺道路，再建住宅和基础设施吧。"],
 };
@@ -1717,14 +1754,38 @@ function computeStats() {
     ? residential.reduce((sum, building) => sum + getTile(building.x, building.z).pollution, 0) / residential.length
     : industrial.length * 4;
   const avenueBoost = roads.filter((tile) => tile.roadTier === "avenue").length * ROAD_TIERS.avenue.happiness;
-  const serviceBoost = park * 0.16 + education * 0.09 + fire * 0.07 + culture * 0.08 + Math.min(8, avenueBoost);
+  const serviceBoost = park * 0.16 + education * 0.09 + fire * 0.07 + culture * 0.08;
   const utilityPenalty = Math.max(0, 100 - power) * 0.09 + Math.max(0, 100 - water) * 0.09;
   const jobPenalty = city.residents.length > 0 ? Math.max(0, 78 - employmentRate) * 0.2 : 4;
   const transportRelief = transport * 0.08 + city.modifiers.trafficBonus;
   const trafficPenalty = Math.max(0, 76 - city.stats.traffic - transportRelief) * 0.24 + routeStats.unreachableResidents * 0.45;
   const pollutionPenalty = Math.min(24, pollution * 0.16);
   const impact = eventImpact();
-  const happiness = clamp(GAME_BALANCE.baseHappiness + serviceBoost - utilityPenalty - jobPenalty - trafficPenalty - pollutionPenalty + impact.happinessDelta + city.modifiers.happinessBonus, 18, 100);
+  const happinessReasons = [
+    impactItem("base", "基础生活", GAME_BALANCE.baseHappiness, "positive"),
+    impactItem("service", "服务与公园", serviceBoost, "positive"),
+    impactItem("avenue", "樱花大道", Math.min(8, avenueBoost), "positive"),
+    impactItem("bonus", "章节奖励", city.modifiers.happinessBonus, "positive"),
+    impactItem("event", "城市事件", impact.happinessDelta, impact.happinessDelta >= 0 ? "positive" : "negative"),
+    impactItem("utility", "水电缺口", -utilityPenalty, "negative"),
+    impactItem("employment", "就业压力", -jobPenalty, "negative"),
+    impactItem("traffic", "通勤压力", -trafficPenalty, "negative"),
+    impactItem("pollution", "污染影响", -pollutionPenalty, "negative"),
+  ].filter((item) => Math.abs(item.value) >= 0.1);
+  const happiness = clamp(happinessReasons.reduce((sum, item) => sum + item.value, 0), 18, 100);
+  const residentNeeds = buildResidentNeeds({
+    power,
+    water,
+    employmentRate,
+    traffic: city.stats.traffic,
+    education,
+    fire,
+    park,
+    culture,
+    transport,
+    pollution,
+    routeStats,
+  });
 
   const incomeEfficiency = clamp(0.55 + city.stats.traffic / 180, 0.45, 1);
   const residentialTax = routeStats.reachableResidents * BUILDINGS.residential.tax * (residential.length ? residential.reduce((sum, building) => sum + levelMultiplier("tax", buildingLevel(building)), 0) / residential.length : 1);
@@ -1750,6 +1811,8 @@ function computeStats() {
   city.stats.culture = culture;
   city.stats.transport = transport;
   city.stats.pollution = pollution;
+  city.stats.happinessReasons = happinessReasons;
+  city.stats.residentNeeds = residentNeeds;
   city.stats.unreachableResidents = routeStats.unreachableResidents;
   city.stats.averageCommute = routeStats.averageCommute;
   city.stats.income = Math.round(adjustedIncome);
@@ -1809,6 +1872,7 @@ function advanceWeek(count = 1) {
 
 function advisorMessages() {
   const messages = [];
+  (city.stats.residentNeeds || []).slice(0, 2).forEach((need) => messages.push({ title: need.title, text: need.detail }));
   if (city.stats.unreachableResidents > 0) messages.push({ title: "有人到不了目的地", text: `${city.stats.unreachableResidents} 位居民找不到可达路线。检查住宅、商业和工业之间的道路连接。` });
   if (city.stats.traffic < 70) messages.push({ title: "道路开始拥堵", text: "通勤变慢了。可以铺设樱花大道或增加支路分流。" });
   if (city.stats.power < 80) messages.push({ title: "电力不足", text: "住宅和商店需要稳定供电。建一座电力设施并靠近道路。" });
@@ -1840,7 +1904,13 @@ function selectedDescription() {
     const active = road ? "道路可达" : "未连接道路";
     const nextCost = upgradeCost(building);
     const upgradeText = buildingLevel(building) >= MAX_BUILDING_LEVEL ? "已满级" : `升级需 ${money(nextCost)}`;
-    return { title: `${config.name} Lv.${buildingLevel(building)} (${active})`, text: `${config.hint} 关联居民/通勤 ${residents.length}。${upgradeText}。` };
+    const coverageText =
+      building.type === "residential"
+        ? `水电 ${Math.round(((tile.coverage.power || 0) + (tile.coverage.water || 0)) * 50)}%，教育 ${Math.round((tile.coverage.education || 0) * 100)}%，消防 ${Math.round((tile.coverage.fire || 0) * 100)}%，污染 ${Math.round(tile.pollution)}。`
+        : config.service
+          ? `服务半径 ${buildingValue(building, "radius")} 格，覆盖会影响附近住宅。`
+          : "";
+    return { title: `${config.name} Lv.${buildingLevel(building)} (${active})`, text: `${config.hint} 关联居民/通勤 ${residents.length}。${coverageText} ${upgradeText}。` };
   }
   return { title: `草地 (${tile.x + 1}, ${tile.z + 1})`, text: "可以在这里规划新的道路或建筑。" };
 }
@@ -1864,6 +1934,15 @@ function renderUI() {
   els.trafficSummary.textContent = stats.traffic < 65 ? "通勤拥堵" : stats.unreachableResidents > 0 ? "道路断点" : "道路通畅";
   els.trafficDetails.textContent = `平均通勤 ${Math.round(stats.averageCommute || 0)} 格，平均拥堵 ${Math.round((stats.averageCongestion || 0) * 100)}%，移动体 ${city.visualAgents.length}/${MAX_VISUAL_AGENTS}。`;
   els.trafficSummary.closest(".traffic-card").classList.toggle("is-congested", stats.traffic < 70 || stats.unreachableResidents > 0);
+  els.needsSummary.textContent = stats.residentNeeds?.length ? stats.residentNeeds[0].title : stats.population > 0 ? "居民需求稳定" : "等待居民入住";
+  els.happinessBreakdown.innerHTML = [
+    ...(stats.happinessReasons || [])
+      .filter((item) => item.id !== "base")
+      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+      .slice(0, 5)
+      .map((item) => `<span class="${item.value >= 0 ? "positive" : "negative"}"><b>${item.value >= 0 ? "+" : ""}${item.value}</b>${item.label}</span>`),
+    ...(stats.residentNeeds || []).slice(0, 3).map((need) => `<em>${need.title}：${need.detail}</em>`),
+  ].join("");
 
   const selected = selectedDescription();
   els.selectedTitle.textContent = selected.title;

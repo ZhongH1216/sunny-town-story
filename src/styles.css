@@ -363,6 +363,52 @@ button {
   background: #fff3ed;
 }
 
+.needs-card {
+  margin-top: 12px;
+}
+
+.needs-card strong {
+  display: block;
+  margin-top: 6px;
+  color: #435f6a;
+}
+
+.happiness-breakdown {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.happiness-breakdown span,
+.happiness-breakdown em {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 7px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #fffdf6;
+  color: #62767b;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.happiness-breakdown span b {
+  color: #4f9662;
+}
+
+.happiness-breakdown span.negative b {
+  color: #d26687;
+}
+
+.happiness-breakdown em {
+  grid-template-columns: 1fr;
+  background: #fff3ed;
+  color: #7a5f63;
+  line-height: 1.35;
+}
+
 .advisor-list {
   display: grid;
   gap: 9px;

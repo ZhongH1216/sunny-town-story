@@ -352,6 +352,65 @@ test("P2 upgrade rules block immature districts and unlock after services improv
   expect(upgraded.achievements).toContain("first_upgrade");
 });
 
+test("P3 resident needs explain low happiness causes", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 15, { tier: "lane" });
+    t.place("residential", 1, 16);
+    t.place("road", 6, 15, { tier: "lane" });
+    t.place("commercial", 6, 16);
+    t.advanceWeek(8);
+  });
+
+  const after = await state(page);
+  const needs = after.stats.residentNeeds.map((need) => need.title).join(" ");
+  const reasons = after.stats.happinessReasons.map((reason) => reason.label).join(" ");
+  expect(needs).toMatch(/电力|供水|通勤|岗位/);
+  expect(reasons).toMatch(/水电缺口|通勤压力|就业压力/);
+  await expect(page.locator("#needsSummary")).toContainText(/电力|供水|通勤|岗位/);
+  await expect(page.locator("#happinessBreakdown")).toContainText(/水电缺口|通勤压力|就业压力/);
+});
+
+test("P3 residential tile details show service coverage and pollution", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(150000);
+    for (let x = 4; x <= 14; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("road", 8, 7, { tier: "avenue" });
+    t.place("power", 5, 7);
+    t.place("water", 6, 7);
+    t.place("power", 12, 5);
+    t.place("water", 13, 5);
+    t.place("residential", 4, 5);
+    t.place("residential", 5, 5);
+    t.place("residential", 7, 7);
+    t.place("residential", 8, 5);
+    t.place("residential", 9, 7);
+    t.place("residential", 10, 5);
+    t.place("residential", 12, 7);
+    t.place("residential", 13, 7);
+    t.place("commercial", 10, 7);
+    t.place("industrial", 11, 7);
+    t.advanceWeek(24);
+    t.place("park", 6, 5);
+    t.place("school", 9, 5);
+    t.advanceWeek(4);
+    t.setSelectedTile(10, 5);
+  });
+
+  const after = await state(page);
+  expect(after.chapterIndex).toBeGreaterThanOrEqual(1);
+  expect(after.stats.education).toBeGreaterThan(0);
+  expect(after.stats.pollution).toBeGreaterThan(0);
+  expect(after.stats.happinessReasons.some((reason) => reason.id === "service")).toBe(true);
+  await expect(page.locator("#selectedInfo")).toContainText("水电");
+  await expect(page.locator("#selectedInfo")).toContainText("教育");
+  await expect(page.locator("#selectedInfo")).toContainText("消防");
+  await expect(page.locator("#selectedInfo")).toContainText("污染");
+});
+
 test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ page }) => {
   await page.goto("/?test=1");
   await page.evaluate(() => {
