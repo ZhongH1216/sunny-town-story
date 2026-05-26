@@ -426,6 +426,61 @@ button {
   background: linear-gradient(90deg, #67b8ff, #8bd681);
 }
 
+.tutorial-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.tutorial-item {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border: 1px solid rgba(103, 184, 255, 0.22);
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.tutorial-item b {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e8f6ff;
+  color: #4b96ca;
+  font-size: 0.78rem;
+}
+
+.tutorial-item strong,
+.tutorial-item small {
+  display: block;
+}
+
+.tutorial-item strong {
+  color: #425f68;
+  font-size: 0.78rem;
+}
+
+.tutorial-item small {
+  margin-top: 2px;
+  color: #74868b;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.tutorial-item.is-done {
+  border-color: rgba(139, 214, 129, 0.36);
+  background: #f2fbef;
+}
+
+.tutorial-item.is-done b {
+  background: #dff5d6;
+  color: #4d9660;
+}
+
 .progress-card small,
 .weekly-report small {
   display: block;

@@ -64,7 +64,7 @@ const BUILDINGS = {
   power: { name: "电力", cost: 3600, maintenance: 55, service: "power", radius: 6, supply: 320, color: 0xffe47a, unlockChapter: 0, hint: "电力设施为附近建筑供电。" },
   water: { name: "水塔", cost: 2800, maintenance: 45, service: "water", radius: 6, supply: 320, color: 0x84c9ff, unlockChapter: 0, hint: "水塔为附近建筑供水。" },
   plaza: { name: "小广场", cost: 4200, maintenance: 38, service: "culture", radius: 4, color: 0xf6d58b, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 60, money: 3000 }, landmark: true, hint: "小广场会提升周边生活气氛，并让住宅更愿意升级。" },
-  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, color: 0xb9d8f2, unlockChapter: 3, unlock: { chapter: 3, population: 420, traffic: 65, money: 12000 }, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
+  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, color: 0xb9d8f2, unlockChapter: 3, unlock: { chapter: 3, population: 420, traffic: 50, money: 12000 }, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
   lantern: { name: "祭典灯", cost: 2400, maintenance: 20, service: "culture", radius: 3, color: 0xffb1a6, unlockChapter: 2, unlock: { chapter: 2, population: 260, happiness: 68, money: 2400 }, landmark: true, hint: "祭典灯提升街区氛围，适合布置在住宅和商业之间。" },
   bulldoze: { name: "拆除", cost: 0, hint: "拆除建筑会退回少量资金，道路也可以拆。" },
 };
@@ -149,7 +149,7 @@ const CHAPTERS = [
     goals: [
       { label: "人口达到 520", value: () => city.stats.population, target: 520 },
       { label: "樱花大道达到 8 格", value: () => countRoads("avenue"), target: 8 },
-      { label: "交通评分达到 76%", value: () => city.stats.traffic, target: 76, unit: "%" },
+      { label: "交通评分达到 55%", value: () => city.stats.traffic, target: 55, unit: "%" },
       { label: "至少 1 座消防站", value: () => countBuildings("fire"), target: 1 },
     ],
   },
@@ -165,6 +165,21 @@ const CHAPTERS = [
       { label: "资金保持为正", value: () => city.stats.money, target: 0, formatter: money },
     ],
   },
+];
+
+const TUTORIAL_TASKS = [
+  { id: "main_street", chapter: 0, title: "铺出主街", text: "道路达到 10 格", check: () => countRoads() >= 10 },
+  { id: "first_homes", chapter: 0, title: "安置居民", text: "住宅达到 4 座", check: () => countBuildings("residential") >= 4 },
+  { id: "water_power", chapter: 0, title: "接上水电", text: "水电覆盖都达到 70%", check: () => city.stats.power >= 70 && city.stats.water >= 70 },
+  { id: "first_jobs", chapter: 0, title: "安排岗位", text: "商业和工业合计达到 2 座", check: () => countBuildings("commercial") + countBuildings("industrial") >= 2 },
+  { id: "service_ring", chapter: 1, title: "补齐服务", text: "建成公园和学校", check: () => countBuildings("park") >= 1 && countBuildings("school") >= 1 },
+  { id: "first_upgrade_task", chapter: 1, title: "升级街区", text: "完成 1 次建筑升级", check: () => city.upgradeCount >= 1 },
+  { id: "avenue_task", chapter: 1, title: "升级道路", text: "樱花大道达到 8 格", check: () => countRoads("avenue") >= 8 },
+  { id: "safety_task", chapter: 2, title: "建立安全网", text: "建成消防站", check: () => countBuildings("fire") >= 1 },
+  { id: "commerce_task", chapter: 2, title: "做旺商店街", text: "商业达到 4 座，周收入达到 ¥5,000", check: () => countBuildings("commercial") >= 4 && city.stats.income >= 5000 },
+  { id: "culture_task", chapter: 2, title: "点亮街区", text: "地标或装饰达到 2 座", check: () => countLandmarks() >= 2 },
+  { id: "station_task", chapter: 3, title: "建立通勤节点", text: "建成小车站并保持交通 50%", check: () => countBuildings("station") >= 1 && city.stats.traffic >= 50 },
+  { id: "livable_task", chapter: 4, title: "稳定宜居", text: "人口 800、幸福 78%、污染低于 30", check: () => city.stats.population >= 800 && city.stats.happiness >= 78 && city.stats.pollution <= 30 },
 ];
 
 const EVENT_DEFINITIONS = [
@@ -184,7 +199,7 @@ const EVENT_DEFINITIONS = [
     text: "主街承压，维护队需要加班疏导交通。",
     duration: 2,
     cooldown: 8,
-    trigger: () => city.stats.traffic < 64 && city.stats.population > 120,
+    trigger: () => city.stats.traffic < 55 && city.stats.population > 120,
     maintenanceDelta: 180,
     happinessDelta: -3,
   },
@@ -264,7 +279,7 @@ const EVENT_DEFINITIONS = [
     text: "通勤和就业承压，店铺客流下降，需要补充岗位或改善道路。",
     duration: 2,
     cooldown: 18,
-    trigger: () => city.stats.population > 300 && (city.stats.employmentRate < 68 || city.stats.traffic < 58),
+    trigger: () => city.stats.population > 300 && (city.stats.employmentRate < 68 || city.stats.traffic < 50),
     incomeMultiplier: 0.88,
     happinessDelta: -3,
   },
@@ -281,7 +296,7 @@ const ACHIEVEMENTS = [
   { id: "chapter_two", title: "服务生活圈", text: "完成第二章。", check: () => city.completedChapters.includes(1) },
   { id: "builder_grade", title: "升级街区", text: "累计完成 5 次建筑升级。", check: () => city.upgradeCount >= 5 },
   { id: "festival_core", title: "节庆核心", text: "建成 2 座地标并让文化覆盖达到 35%。", check: () => countLandmarks() >= 2 && city.stats.culture >= 35 },
-  { id: "transit_ready", title: "通勤节点", text: "建成小车站并让交通评分保持 76%。", check: () => countBuildings("station") >= 1 && city.stats.traffic >= 76 },
+  { id: "transit_ready", title: "通勤节点", text: "建成小车站并让交通评分保持 50%。", check: () => countBuildings("station") >= 1 && city.stats.traffic >= 50 },
   { id: "five_hundred_people", title: "五百人的晴日港", text: "人口达到 500。", check: () => city.stats.population >= 500 },
   { id: "main_story", title: "阳光小镇", text: "完成第五章主线。", check: () => city.completed },
 ];
@@ -402,6 +417,14 @@ function formatGoalValue(goal, value) {
   return `${Math.round(value)}${goal.unit || ""}`;
 }
 
+function tutorialProgress() {
+  const tasks = TUTORIAL_TASKS.map((task) => ({ ...task, done: task.check() }));
+  const currentIndex = tasks.findIndex((task) => !task.done && task.chapter <= city.chapterIndex);
+  const activeIndex = currentIndex === -1 ? tasks.findIndex((task) => !task.done) : currentIndex;
+  if (activeIndex === -1) return tasks.slice(-3);
+  return tasks.slice(Math.max(0, activeIndex - 1), activeIndex + 4);
+}
+
 function metricValue(metric) {
   const map = {
     chapter: city.chapterIndex,
@@ -511,6 +534,7 @@ const els = {
   chapterTitle: document.querySelector("#chapterTitle"),
   chapterSummary: document.querySelector("#chapterSummary"),
   questList: document.querySelector("#questList"),
+  tutorialList: document.querySelector("#tutorialList"),
   unlockText: document.querySelector("#unlockText"),
   eventList: document.querySelector("#eventList"),
   achievementList: document.querySelector("#achievementList"),
@@ -1635,7 +1659,7 @@ function updateTrafficStats() {
   });
   const avg = roads.length ? roads.reduce((sum, tile) => sum + tile.congestion, 0) / roads.length : 0;
   city.stats.averageCongestion = avg;
-  city.stats.traffic = clamp(100 - avg * 54);
+  city.stats.traffic = clamp(100 - avg * 40);
 }
 
 function computeStats() {
@@ -1769,10 +1793,7 @@ function advanceWeek(count = 1) {
     if (city.stats.money > previousMoney) spawnBubble(`+${money(city.stats.money - previousMoney)}`, 9, 9, 0xffb85f);
     if (city.stats.population > previousPopulation) spawnBubble(`+${city.stats.population - previousPopulation} 人`, 8, 8, 0x5aa27d);
 
-    if (!city.completed && city.stats.population >= 800 && city.stats.happiness >= 75 && city.stats.money > 0) {
-      city.completed = true;
-      addMessage("阳光小镇已成型！居民们沿着樱花大道举办了小小庆祝会。");
-    } else if (city.bankruptWeeks >= 6) {
+    if (city.bankruptWeeks >= 6) {
       addMessage("财政连续赤字太久，小镇进入托管状态。拆除高维护设施或等待税收恢复。");
     } else {
       addMessage(`第 ${city.week} 周结算：收入 ${money(income)}，维护 ${money(maintenance)}。`);
@@ -1891,6 +1912,14 @@ function renderUI() {
         <div class="quest-bar" style="--progress:${Math.round(progress.ratio * 100)}%"><i></i></div>
       </article>`;
     })
+    .join("");
+  els.tutorialList.innerHTML = tutorialProgress()
+    .map(
+      (task) => `<article class="tutorial-item ${task.done ? "is-done" : "is-active"}">
+        <b>${task.done ? "✓" : "→"}</b>
+        <span><strong>${task.title}</strong><small>${task.text}</small></span>
+      </article>`,
+    )
     .join("");
   const lockedTools = els.toolButtons
     .map((button) => button.dataset.tool)
@@ -2202,6 +2231,8 @@ function exposeTestApi() {
       history: city.history.map((item) => ({ ...item })),
       report: { ...city.report },
       unlocks: Object.fromEntries(Object.keys(BUILDINGS).map((tool) => [tool, unlockState(tool)])),
+      tutorial: tutorialProgress().map((task) => ({ id: task.id, title: task.title, text: task.text, done: task.done })),
+      tutorialAll: TUTORIAL_TASKS.map((task) => ({ id: task.id, title: task.title, text: task.text, done: task.check() })),
       selectedTool: city.selectedTool,
       selectedRoadTier: city.selectedRoadTier,
       roadVersion: city.roadVersion,

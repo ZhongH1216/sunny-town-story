@@ -292,6 +292,27 @@ test("P2 building unlocks explain population, happiness and money requirements",
   await expect(page.locator("#unlockText")).toContainText("待解锁");
 });
 
+test("tutorial task chain surfaces the next useful town step", async ({ page }) => {
+  await page.goto("/?test=1");
+  const opening = await state(page);
+  expect(opening.tutorial.some((task) => task.id === "first_homes" && !task.done)).toBe(true);
+  await expect(page.locator("#tutorialList")).toContainText("安置居民");
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("power", 7, 10);
+    t.place("water", 9, 10);
+    t.place("residential", 6, 8);
+    t.place("residential", 10, 8);
+    t.place("residential", 6, 10);
+    t.advanceWeek(6);
+  });
+
+  const after = await state(page);
+  expect(after.tutorialAll.some((task) => task.id === "first_homes" && task.done)).toBe(true);
+  expect(after.tutorial.some((task) => task.id === "water_power")).toBe(true);
+});
+
 test("P2 upgrade rules block immature districts and unlock after services improve", async ({ page }) => {
   await page.goto("/?test=1");
   await page.evaluate(() => {
@@ -364,6 +385,121 @@ test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ pag
   expect(after.report.trends.population).toMatch(/[↑↓→]/);
   await expect(page.locator("#reportDetails")).toContainText("人口");
   await expect(page.locator("#achievementList")).toContainText("有了地标");
+});
+
+test("P2 long-run town can complete all five chapters within 200 weeks", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(900000);
+
+    for (const z of [2, 4, 6, 8, 10, 12, 14, 16]) {
+      for (let x = 2; x <= 15; x += 1) t.place("road", x, z, { tier: "avenue" });
+    }
+    for (const x of [2, 5, 8, 11, 14]) {
+      for (let z = 2; z <= 16; z += 1) t.place("road", x, z, { tier: "avenue" });
+    }
+
+    [
+      ["power", 2, 3],
+      ["water", 3, 3],
+      ["power", 4, 3],
+      ["water", 6, 3],
+      ["power", 7, 3],
+      ["water", 9, 3],
+      ["power", 10, 3],
+      ["water", 12, 3],
+      ["power", 13, 3],
+      ["water", 15, 3],
+      ["power", 2, 15],
+      ["water", 5, 15],
+      ["power", 2, 1],
+      ["water", 5, 1],
+      ["power", 8, 1],
+      ["water", 11, 1],
+      ["power", 14, 1],
+      ["water", 8, 15],
+      ["power", 11, 15],
+      ["water", 14, 15],
+      ["power", 2, 17],
+      ["water", 5, 17],
+      ["power", 8, 17],
+      ["water", 11, 17],
+      ["power", 14, 17],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+
+    const reserved = new Set(["4,1", "6,1", "9,1", "6,5", "9,5", "12,5", "6,7", "9,7", "12,7", "6,9", "9,9", "12,9", "6,11", "9,11", "12,11", "12,13"]);
+    const homes = [];
+    for (const z of [1, 5, 7, 9, 11, 13, 17]) {
+      for (const x of [3, 4, 6, 7, 9, 10, 12, 13]) {
+        if (!reserved.has(`${x},${z}`)) homes.push([x, z]);
+      }
+    }
+    homes.slice(0, 42).forEach(([x, z]) => t.place("residential", x, z));
+
+    [
+      [3, 15],
+      [4, 15],
+      [6, 15],
+      [7, 15],
+      [9, 15],
+      [10, 15],
+      [12, 15],
+      [13, 15],
+      [15, 15],
+      [4, 1],
+      [6, 1],
+      [9, 1],
+    ].forEach(([x, z]) => t.place("commercial", x, z));
+    [
+      [15, 5],
+      [15, 7],
+      [15, 9],
+      [15, 11],
+    ].forEach(([x, z]) => t.place("industrial", x, z));
+
+    t.advanceWeek(36);
+    [
+      ["park", 6, 5],
+      ["park", 6, 7],
+      ["park", 6, 9],
+      ["school", 9, 5],
+      ["school", 9, 7],
+      ["school", 9, 9],
+      ["plaza", 12, 5],
+      ["plaza", 12, 7],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+    t.setSelectedTile(homes[0][0], homes[0][1]);
+    t.upgradeSelectedBuilding();
+
+    t.advanceWeek(12);
+    homes.slice(0, 20).forEach(([x, z]) => {
+      t.setSelectedTile(x, z);
+      t.upgradeSelectedBuilding();
+    });
+    [
+      ["fire", 12, 9],
+      ["fire", 12, 11],
+      ["lantern", 6, 11],
+      ["lantern", 9, 11],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+
+    t.advanceWeek(12);
+    t.place("station", 12, 13);
+    t.advanceWeek(120);
+  });
+
+  const after = await state(page);
+  expect(after.completed).toBe(true);
+  expect(after.chapterIndex).toBe(4);
+  expect(after.appliedBonuses).toContain("finale_fund");
+  expect(after.stats.population).toBeGreaterThanOrEqual(800);
+  expect(after.stats.happiness).toBeGreaterThanOrEqual(78);
+  expect(after.stats.pollution).toBeLessThanOrEqual(30);
+  expect(after.stats.money).toBeGreaterThan(0);
+  expect(after.history.every((item) => Number.isFinite(item.population) && Number.isFinite(item.money))).toBe(true);
+  expect(after.tutorialAll.some((task) => task.id === "station_task" && task.done)).toBe(true);
+  expect(after.tutorial.some((task) => task.id === "livable_task" && task.done)).toBe(true);
 });
 
 test("manual saves unlock an achievement and update save status", async ({ page }) => {
