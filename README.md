@@ -106,38 +106,84 @@ test-results/sunny-town-desktop.png
 
 ## 环境要求
 
-当前项目按本机环境配置：
+当前项目推荐使用仓库提供的 conda 开发环境，不再绑定某台机器的 Python 绝对路径：
 
 - Windows
-- Anaconda/Miniconda
-- `aigo` conda 环境
-- Python 路径：`D:\python\anaconda\envs\aigo\python.exe`
-- Node.js
-- npm
+- Anaconda 或 Miniconda
+- `sunny-town-dev` conda 环境，包含 Python 3.12、Node.js 和 npm
 
-`package.json` 中的脚本绑定了该 Python 路径：
+首次克隆后可以一键准备环境：
+
+```powershell
+.\scripts\setup-dev.bat
+```
+
+或者使用 PowerShell 脚本：
+
+```powershell
+.\scripts\setup-dev.ps1
+```
+
+如果只想先安装 Python/Node/npm 和 npm 依赖，暂时跳过 Playwright 浏览器下载：
+
+```powershell
+.\scripts\setup-dev.bat --skip-browsers
+```
+
+之后进入开发环境：
+
+```powershell
+conda activate sunny-town-dev
+```
+
+项目会按以下顺序寻找 Python：
+
+1. `.env` 或系统环境变量中的 `SUNNY_TOWN_PYTHON`
+2. Windows 的 `py -3`
+3. `python`
+4. `python3`
+
+双击 `start-sunny-town.bat` 时，如果系统 PATH 中没有 Node/npm/Python，但本机已经有 `sunny-town-dev`，启动器也会自动复用该 conda 环境。
+
+如果你的 Python 不在 PATH 中，可以复制 `.env.example` 为 `.env`，再填写本机路径：
+
+```text
+SUNNY_TOWN_PYTHON=C:\Python\python.exe
+SUNNY_TOWN_HOST=127.0.0.1
+SUNNY_TOWN_PORT=8765
+```
+
+`package.json` 当前脚本：
 
 ```json
 {
-  "serve": "\"D:\\python\\anaconda\\envs\\aigo\\python.exe\" app.py",
+  "check": "node tools/check-env.js",
+  "install:browsers": "npx playwright install chromium",
+  "setup": "scripts\\setup-dev.bat",
+  "serve": "node tools/serve.js",
+  "start": "node tools/start-server.js",
   "test": "node tools/run-tests.js"
 }
 ```
 
-如果换机器或 Python 环境路径不同，需要同步修改 `package.json` 和 `tools/*.js` 中的 Python 路径。
-
 ## 安装依赖
 
-首次克隆后运行：
+如果已经激活 `sunny-town-dev`，也可以手动安装依赖：
 
 ```powershell
 npm.cmd install
 ```
 
+可以先检查本地环境：
+
+```powershell
+npm.cmd run check
+```
+
 如果 Playwright 浏览器缺失，运行：
 
 ```powershell
-npx.cmd playwright install chromium
+npm.cmd run install:browsers
 ```
 
 ## 本地运行
@@ -150,6 +196,8 @@ start-sunny-town.bat
 
 它会自动进入项目目录，首次运行时安装 npm 依赖，启动本地服务，并打开浏览器访问游戏。
 
+如果本机还没有 `sunny-town-dev`，但已经安装 conda，启动器会自动调用 `scripts\setup-dev.bat --skip-browsers` 创建开发环境并安装基础依赖。Playwright 浏览器只用于自动化测试，普通游玩不需要先下载它。
+
 根目录也保留了 `启动阳光小镇.bat`，它只是转发到英文启动器。英文文件名更推荐，因为 Windows 批处理在不同编码环境下处理中文内容容易出错。
 
 启动后会保留一个命令行窗口。这个窗口就是本地游戏服务器：
@@ -157,11 +205,12 @@ start-sunny-town.bat
 - 游玩时保持窗口打开。
 - 想结束游戏时，关闭这个窗口或在窗口里按 `Ctrl+C`。
 - 如果之前旧版启动器留下了后台服务，双击 `stop-sunny-town.bat` 或 `停止阳光小镇.bat` 清理。
+- `stop-sunny-town.bat` 会按 `server.pid` 和 `8765` 端口双重清理，适合处理窗口异常关闭后的残留服务。
 
 命令行方式：
 
 ```powershell
-cd "D:\Pycharm project\cool"
+cd "D:\python project\sunny-town-story"
 npm.cmd run serve
 ```
 

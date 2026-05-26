@@ -40,13 +40,14 @@ npm.cmd test
 
 ## 运行环境
 
-当前机器环境：
+当前项目已完成 P0 环境去机器绑定。运行环境要求：
 
-- 工作目录：`D:\Pycharm project\cool`
+- 工作目录：`D:\python project\sunny-town-story`
 - Shell：PowerShell
-- Python：`D:\python\anaconda\envs\aigo\python.exe`
-- Git：`C:\Program Files\Git\cmd\git.exe`
-- Node/npm 已安装
+- 推荐 conda 环境：`sunny-town-dev`
+- Python：`C:\Python\anaconda3\envs\sunny-town-dev\python.exe`
+- Node/npm：`C:\Python\anaconda3\envs\sunny-town-dev\node.exe` / `npm.cmd`
+- Git：`C:\Program Files\Git\cmd\git.exe`，当前 PowerShell 中 `git` 不一定在 PATH
 
 注意：
 
@@ -56,8 +57,13 @@ npm.cmd test
 & "C:\Program Files\Git\cmd\git.exe" status
 ```
 
-- `package.json`、`tools/run-tests.js`、`tools/start-server.js` 都绑定了 `aigo` 环境 Python 路径。
-- 如果迁移到其他机器，需要修改上述文件中的 Python 路径。
+- `package.json`、`tools/run-tests.js`、`tools/start-server.js` 已不再绑定旧的 `aigo` Python 路径。
+- Python 解析逻辑集中在 `tools/env.js`。
+- 项目会优先读取 `.env` 或系统环境变量里的 `SUNNY_TOWN_PYTHON`，否则自动尝试 `py -3`、`python`、`python3`。
+- 如果 Python 不在 PATH 中，复制 `.env.example` 为 `.env` 并填写本机路径。
+- 新电脑推荐直接运行 `.\scripts\setup-dev.bat`，它会创建/更新 `sunny-town-dev`、安装 npm 依赖和 Playwright Chromium。
+- 如浏览器下载较慢，可先执行 `.\scripts\setup-dev.bat --skip-browsers`，之后再运行 `npm.cmd run install:browsers`。
+- 当前已验证：`npm.cmd test` 在提升权限环境下通过 `7 passed`。普通沙箱中启动 Playwright Chromium 可能报 `spawn EPERM`，这是运行权限限制，不是项目测试失败。
 - Windows PowerShell 直接 `Get-Content` 中文 UTF-8 文件时可能显示乱码，但浏览器、GitHub 和测试按 UTF-8 正常渲染。
 
 ## 核心文件
@@ -144,8 +150,8 @@ Playwright 测试。
 
 职责：
 
-- 使用 `aigo` Python 启动 `app.py`
-- 等待 `http://127.0.0.1:8765`
+- 使用 `tools/env.js` 解析 Python 后启动 `app.py`
+- 等待配置的本地 URL，默认 `http://127.0.0.1:8765`
 - 调用本地 Playwright CLI
 - 测试结束后关闭服务进程
 
@@ -172,10 +178,11 @@ npm.cmd run serve
 职责：
 
 - 自动切换到项目根目录
-- 检查 Node.js
+- 检查 Node/npm/Python，必要时自动复用 `sunny-town-dev`
+- 如果 conda 存在但 `sunny-town-dev` 不存在，自动调用 `scripts\setup-dev.bat --skip-browsers` 创建基础开发环境
 - 如果缺少 `node_modules`，自动执行 `npm.cmd install`
 - 自动打开 `http://127.0.0.1:8765`
-- 前台运行 `app.py`，窗口关闭或 `Ctrl+C` 后服务随之结束
+- 使用解析到的 Python 前台运行 `app.py`，窗口关闭或 `Ctrl+C` 后服务随之结束
 - 启动失败时停在窗口里显示错误，避免双击后窗口瞬间消失
 
 实现注意：
@@ -184,6 +191,7 @@ npm.cmd run serve
 - `启动阳光小镇.bat` 只负责 `call start-sunny-town.bat`。
 - 不要把复杂中文提示写进 `.bat` 的括号代码块里；cmd 在不同代码页下容易把 UTF-8 中文拆成半截命令。
 - `stop-sunny-town.bat` / `停止阳光小镇.bat` 用于结束旧版后台服务或清理占用 `8765` 端口的进程。
+- `stop-sunny-town.bat` 会先读 `server.pid`，再按配置端口兜底查杀监听进程。
 
 ## 数据结构摘要
 
@@ -357,8 +365,14 @@ window.sunnyTownTest.getState();
 或：
 
 ```powershell
-cd "D:\Pycharm project\cool"
+cd "D:\python project\sunny-town-story"
 npm.cmd run serve
+```
+
+环境检查：
+
+```powershell
+npm.cmd run check
 ```
 
 测试：

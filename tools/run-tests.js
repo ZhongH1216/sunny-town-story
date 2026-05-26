@@ -1,22 +1,22 @@
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
+const { root, pythonAppCommand } = require("./env");
 
-const root = path.resolve(__dirname, "..");
-const python = "D:\\python\\anaconda\\envs\\aigo\\python.exe";
-const url = "http://127.0.0.1:8765";
+let serverUrl = "http://127.0.0.1:8765";
 
 function waitForServer(deadlineMs = 15000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const probe = () => {
-      const req = http.get(url, (res) => {
+      const req = http.get(serverUrl, (res) => {
         res.resume();
         resolve();
       });
       req.on("error", () => {
         if (Date.now() - started > deadlineMs) {
-          reject(new Error(`Server did not respond at ${url}`));
+          reject(new Error(`Server did not respond at ${serverUrl}`));
           return;
         }
         setTimeout(probe, 250);
@@ -42,7 +42,14 @@ function run(command, args, options = {}) {
 }
 
 async function main() {
-  const server = spawn(python, ["app.py", "--host", "127.0.0.1", "--port", "8765"], {
+  const app = await pythonAppCommand();
+  serverUrl = app.url;
+  const playwrightCli = path.join(root, "node_modules", "@playwright", "test", "cli.js");
+  if (!fs.existsSync(playwrightCli)) {
+    throw new Error("Playwright is not installed. Run npm install first.");
+  }
+
+  const server = spawn(app.command, app.args, {
     cwd: root,
     shell: false,
     stdio: ["ignore", "pipe", "pipe"],
@@ -53,7 +60,7 @@ async function main() {
 
   try {
     await waitForServer();
-    const code = await run(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config=playwright.config.js"], {
+    const code = await run(process.execPath, [playwrightCli, "test", "--config=playwright.config.js"], {
       env: { ...process.env, PLAYWRIGHT_SKIP_WEBSERVER: "1" },
     });
     process.exitCode = code;
@@ -63,6 +70,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(error.message);
   process.exit(1);
 });
