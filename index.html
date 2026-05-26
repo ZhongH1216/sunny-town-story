@@ -24,6 +24,12 @@
           <div><span>电力</span><strong id="power">0%</strong></div>
           <div><span>水力</span><strong id="water">0%</strong></div>
         </section>
+        <section class="save-controls" aria-label="存档控制">
+          <button id="saveButton" type="button">保存</button>
+          <button id="newGameButton" type="button">新游戏</button>
+          <button id="resetButton" type="button">清除存档</button>
+          <small id="saveStatus">尚未保存</small>
+        </section>
       </header>
 
       <aside class="build-panel" aria-label="建造工具">
@@ -67,14 +73,31 @@
           <p id="trafficDetails">居民会沿道路通勤；拥堵会降低幸福度和税收效率。</p>
         </section>
         <section class="advisor-list" id="advisorList" aria-live="polite"></section>
+        <section class="progress-card">
+          <span>章节目标</span>
+          <strong id="chapterTitle">第一章：初建小镇</strong>
+          <p id="chapterSummary">铺出主街，接上水电，让第一批居民稳定搬入。</p>
+          <div class="quest-list" id="questList"></div>
+          <small id="unlockText">完成章节后解锁更多服务建筑。</small>
+        </section>
+        <section class="event-card">
+          <span>城市事件</span>
+          <div id="eventList">暂无事件</div>
+        </section>
         <section class="selection-card">
           <span>当前格子</span>
           <strong id="selectedTitle">未选择</strong>
           <p id="selectedInfo">点击地图格子来建造、查看或拆除。</p>
+          <button id="upgradeButton" type="button">升级建筑</button>
         </section>
         <section class="weekly-report">
           <span>周报</span>
           <p id="weeklyReport">欢迎来到晴日港。先铺道路，再建住宅和基础设施吧。</p>
+          <small id="reportDetails">收入、维护和事件影响会在每周结算后显示。</small>
+        </section>
+        <section class="achievement-card">
+          <span>成就</span>
+          <div id="achievementList">暂无成就</div>
         </section>
       </aside>
 

@@ -4,12 +4,12 @@
   "description": "A sunny Japanese-inspired 3D casual town builder.",
   "main": "app.py",
   "scripts": {
-    "check": "node tools/check-env.js",
+    "check": "tools\\node-shim.cmd tools\\check-env.js",
     "install:browsers": "npx playwright install chromium",
     "setup": "scripts\\setup-dev.bat",
-    "serve": "node tools/serve.js",
-    "start": "node tools/start-server.js",
-    "test": "node tools/run-tests.js"
+    "serve": "tools\\node-shim.cmd tools\\serve.js",
+    "start": "tools\\node-shim.cmd tools\\start-server.js",
+    "test": "tools\\node-shim.cmd tools\\run-tests.js"
   },
   "keywords": [],
   "author": "",

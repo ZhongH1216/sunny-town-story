@@ -31,6 +31,9 @@ test("sunny town renders the desktop 3D builder and traffic HUD", async ({ page 
   await expect(page.locator("[data-road-tier='lane']")).toBeVisible();
   await expect(page.locator("[data-road-tier='avenue']")).toBeVisible();
   await expect(page.locator("#trafficSummary")).toBeVisible();
+  await expect(page.locator("#chapterTitle")).toContainText("第一章");
+  await expect(page.locator("#saveButton")).toBeVisible();
+  await expect(page.locator("#upgradeButton")).toBeVisible();
   await expect(page.locator("#scene")).toBeVisible();
   await page.waitForTimeout(1200);
   await page.screenshot({ path: "test-results/sunny-town-desktop.png", fullPage: true });
@@ -160,4 +163,64 @@ test("avenues carry the same sampled load with lower congestion than lanes", asy
   const avenue = roads.find((road) => road.x === 2 && road.z === 1);
   const sameLoad = Math.max(lane.load, avenue.load, 10);
   expect(sameLoad / avenue.capacity).toBeLessThan(sameLoad / lane.capacity);
+});
+
+test("save data restores roads, buildings, chapters and upgrades", async ({ page }) => {
+  await page.goto("/?test=1");
+  const save = await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 1, { tier: "lane" });
+    t.place("residential", 1, 2);
+    t.setSelectedTile(1, 2);
+    t.upgradeSelectedBuilding();
+    t.advanceWeek(2);
+    return t.serializeGame();
+  });
+
+  await page.evaluate((snapshot) => {
+    window.sunnyTownTest.startNewGame({ keepStorage: true });
+    window.sunnyTownTest.loadSave(snapshot);
+  }, save);
+
+  const after = await state(page);
+  expect(after.roads.some((road) => road.x === 1 && road.z === 1)).toBe(true);
+  const home = after.buildings.find((building) => building.x === 1 && building.z === 2);
+  expect(home).toBeTruthy();
+  expect(home.level).toBe(2);
+  expect(after.week).toBe(save.city.week);
+});
+
+test("chapter goals unlock service buildings and achievements", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(250000);
+    for (let x = 4; x <= 13; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("road", 8, 7, { tier: "avenue" });
+    t.place("power", 5, 7);
+    t.place("water", 6, 7);
+    t.place("residential", 4, 5);
+    t.place("residential", 5, 5);
+    t.place("residential", 7, 7);
+    t.place("residential", 8, 5);
+    t.place("residential", 9, 7);
+    t.place("residential", 12, 7);
+    t.place("residential", 13, 7);
+    t.place("commercial", 10, 7);
+    t.place("industrial", 11, 7);
+    t.advanceWeek(22);
+  });
+  const after = await state(page);
+  expect(after.chapterIndex).toBeGreaterThanOrEqual(1);
+  await expect(page.locator("[data-tool='park']")).toBeEnabled();
+  expect(after.achievements).toContain("hundred_people");
+});
+
+test("manual saves unlock an achievement and update save status", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => window.sunnyTownTest.saveGame(true));
+  const after = await state(page);
+  expect(after.achievements).toContain("first_save");
+  expect(after.saveStatus).toContain("手动保存");
+  await expect(page.locator("#saveStatus")).toContainText("手动保存");
 });

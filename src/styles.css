@@ -108,9 +108,12 @@ button {
 .traffic-card,
 .selection-card,
 .weekly-report,
+.progress-card,
+.event-card,
+.achievement-card,
 .advisor-list li {
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(255, 253, 245, 0.9);
   box-shadow: 0 8px 20px rgba(113, 150, 132, 0.14);
 }
@@ -123,7 +126,10 @@ button {
 .selection-card span,
 .weekly-report span,
 .traffic-card span,
-.goal-card span {
+.goal-card span,
+.progress-card span,
+.event-card span,
+.achievement-card span {
   display: block;
   color: var(--muted);
   font-size: 0.72rem;
@@ -138,11 +144,50 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.save-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: 8px;
+  width: 286px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 253, 245, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.save-controls button,
+#upgradeButton {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: #67b8ff;
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.save-controls button:nth-child(2) {
+  background: #8bd681;
+}
+
+.save-controls button:nth-child(3) {
+  background: #ee6b6e;
+}
+
+.save-controls small {
+  grid-column: 1 / -1;
+  color: #5e747a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .build-panel,
 .advisor-panel,
 .bottom-bar {
   border: 2px solid rgba(255, 255, 255, 0.86);
-  border-radius: 28px;
+  border-radius: 8px;
   background: rgba(255, 248, 232, 0.9);
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
@@ -160,6 +205,8 @@ button {
   grid-row: 2;
   align-self: center;
   padding: 16px;
+  max-height: calc(100vh - 176px);
+  overflow: auto;
 }
 
 .panel-title {
@@ -274,13 +321,17 @@ button {
 .goal-card,
 .traffic-card,
 .selection-card,
-.weekly-report {
+.weekly-report,
+.progress-card,
+.event-card,
+.achievement-card {
   padding: 14px;
 }
 
 .goal-card strong,
 .traffic-card strong,
-.selection-card strong {
+.selection-card strong,
+.progress-card strong {
   display: block;
   margin-top: 6px;
   color: #435f6a;
@@ -290,6 +341,7 @@ button {
 .traffic-card p,
 .selection-card p,
 .weekly-report p,
+.progress-card p,
 .advisor-list p {
   margin: 7px 0 0;
   color: #62767b;
@@ -331,6 +383,91 @@ button {
 .advisor-list li.is-warning {
   border-color: rgba(238, 107, 110, 0.35);
   background: #fff3ed;
+}
+
+.progress-card,
+.event-card,
+.achievement-card {
+  margin-top: 12px;
+}
+
+.quest-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.quest-item {
+  display: grid;
+  gap: 4px;
+}
+
+.quest-item header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #4f6b73;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.quest-bar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(103, 184, 255, 0.18);
+}
+
+.quest-bar i {
+  display: block;
+  height: 100%;
+  width: var(--progress);
+  border-radius: inherit;
+  background: linear-gradient(90deg, #67b8ff, #8bd681);
+}
+
+.progress-card small,
+.weekly-report small {
+  display: block;
+  margin-top: 9px;
+  color: #7b8b90;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+#eventList,
+#achievementList {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  color: #62767b;
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.event-pill,
+.achievement-pill {
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #fff3ed;
+  color: #5e747a;
+  font-weight: 800;
+}
+
+.achievement-pill {
+  background: #eef9e8;
+}
+
+#upgradeButton {
+  width: 100%;
+  margin-top: 10px;
+  background: #ffb85f;
+}
+
+#upgradeButton:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.45);
+  opacity: 0.58;
 }
 
 .bottom-bar {

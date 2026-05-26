@@ -116,6 +116,13 @@ async function resolvePython() {
     return { command: configured, args: [] };
   }
 
+  if (process.platform === "win32") {
+    const sibling = path.join(path.dirname(process.execPath), "python.exe");
+    if (fs.existsSync(sibling)) {
+      return { command: sibling, args: [] };
+    }
+  }
+
   if (process.platform === "win32" && (await commandExists("py", ["-3", "--version"]))) {
     return { command: "py", args: ["-3"] };
   }

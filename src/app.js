@@ -5,6 +5,45 @@ const TILE_SIZE = 2.4;
 const WEEK_SECONDS = 4;
 const INITIAL_MONEY = 50000;
 const MAX_VISUAL_AGENTS = 60;
+const SAVE_VERSION = 1;
+const SAVE_KEY = "sunny-town-story.save.v1";
+const AUTO_SAVE_INTERVAL_WEEKS = 4;
+const MAX_BUILDING_LEVEL = 3;
+const query = new URLSearchParams(window.location.search);
+const TEST_MODE = query.has("test");
+
+const GAME_BALANCE = {
+  residentialGrowthStep: 28,
+  utilityNeedPerBuilding: 28,
+  utilityNeedPerHome: 10,
+  baseHappiness: 72,
+  upgradeCostMultiplier: 0.72,
+  levelMultipliers: {
+    capacity: [1, 1.55, 2.25],
+    tax: [1, 1.32, 1.72],
+    jobs: [1, 1.45, 2.05],
+    maintenance: [1, 1.45, 2.05],
+    service: [1, 1.22, 1.45],
+    supply: [1, 1.4, 1.9],
+    pollution: [1, 1.15, 1.35],
+  },
+};
+
+const ASSET_MANIFEST = {
+  style: "warm-pixel-lowpoly",
+  textureSize: 16,
+  generated: "runtime-canvas",
+  textures: {
+    residential: ["#ffb8c9", "#ffe3ec", "#f68eaa", "#fff5d6"],
+    commercial: ["#ffd36f", "#fff1a6", "#ffb85f", "#ffffff"],
+    industrial: ["#9fc0cf", "#d4e5ec", "#7899a7", "#f2f6f7"],
+    park: ["#8ddf91", "#bff0a9", "#62b96c", "#ffd0dd"],
+    school: ["#ffc36e", "#ffe0a6", "#f09b50", "#ffffff"],
+    fire: ["#ff8b7f", "#ffd0ca", "#e65f5d", "#ffffff"],
+    power: ["#ffe47a", "#fff3b8", "#f1b84b", "#ffffff"],
+    water: ["#84c9ff", "#d5f2ff", "#5aaee7", "#ffffff"],
+  },
+};
 
 const ROAD_TIERS = {
   lane: { name: "普通道路", cost: 80, maintenance: 2, capacity: 16, color: 0xd9cda8, speed: 1 },
@@ -13,16 +52,125 @@ const ROAD_TIERS = {
 
 const BUILDINGS = {
   road: { name: "道路", hint: "道路会自动连接。樱花大道容量更高，也更漂亮。" },
-  residential: { name: "住宅", cost: 900, maintenance: 8, tax: 38, capacity: 38, color: 0xffb8c9, hint: "居民会从住宅出发，沿道路前往工作或消费地点。" },
-  commercial: { name: "商业", cost: 1300, maintenance: 18, tax: 72, jobs: 42, color: 0xffd36f, hint: "商业提供岗位和税收，也会吸引居民消费。" },
-  industrial: { name: "工业", cost: 1600, maintenance: 22, tax: 92, jobs: 64, pollution: 14, color: 0x9fc0cf, hint: "工业岗位多、税收高，但会制造污染和交通压力。" },
-  park: { name: "公园", cost: 1100, maintenance: 18, service: "park", radius: 3, color: 0x8ddf91, hint: "公园会提升附近住宅幸福度。" },
-  school: { name: "学校", cost: 2600, maintenance: 42, service: "education", radius: 4, color: 0xffc36e, hint: "学校提升教育覆盖和长期幸福度。" },
-  fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, color: 0xff8b7f, hint: "消防站降低城市风险，提高居民安心感。" },
-  power: { name: "电力", cost: 3600, maintenance: 55, service: "power", radius: 6, supply: 320, color: 0xffe47a, hint: "电力设施为附近建筑供电。" },
-  water: { name: "水塔", cost: 2800, maintenance: 45, service: "water", radius: 6, supply: 320, color: 0x84c9ff, hint: "水塔为附近建筑供水。" },
+  residential: { name: "住宅", cost: 900, maintenance: 8, tax: 38, capacity: 38, color: 0xffb8c9, unlockChapter: 0, hint: "居民会从住宅出发，沿道路前往工作或消费地点。" },
+  commercial: { name: "商业", cost: 1300, maintenance: 18, tax: 72, jobs: 42, color: 0xffd36f, unlockChapter: 0, hint: "商业提供岗位和税收，也会吸引居民消费。" },
+  industrial: { name: "工业", cost: 1600, maintenance: 22, tax: 92, jobs: 64, pollution: 14, color: 0x9fc0cf, unlockChapter: 0, hint: "工业岗位多、税收高，但会制造污染和交通压力。" },
+  park: { name: "公园", cost: 1100, maintenance: 18, service: "park", radius: 3, color: 0x8ddf91, unlockChapter: 1, hint: "公园会提升附近住宅幸福度。" },
+  school: { name: "学校", cost: 2600, maintenance: 42, service: "education", radius: 4, color: 0xffc36e, unlockChapter: 1, hint: "学校提升教育覆盖和长期幸福度。" },
+  fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, color: 0xff8b7f, unlockChapter: 2, hint: "消防站降低城市风险，提高居民安心感。" },
+  power: { name: "电力", cost: 3600, maintenance: 55, service: "power", radius: 6, supply: 320, color: 0xffe47a, unlockChapter: 0, hint: "电力设施为附近建筑供电。" },
+  water: { name: "水塔", cost: 2800, maintenance: 45, service: "water", radius: 6, supply: 320, color: 0x84c9ff, unlockChapter: 0, hint: "水塔为附近建筑供水。" },
   bulldoze: { name: "拆除", cost: 0, hint: "拆除建筑会退回少量资金，道路也可以拆。" },
 };
+
+const CHAPTERS = [
+  {
+    title: "第一章：初建小镇",
+    summary: "铺出主街，接上水电，让第一批居民稳定搬入。",
+    reward: "解锁公园与学校。",
+    goals: [
+      { label: "道路达到 10 格", value: () => countRoads(), target: 10 },
+      { label: "人口达到 120", value: () => city.stats.population, target: 120 },
+      { label: "电力覆盖 70%", value: () => city.stats.power, target: 70, unit: "%" },
+      { label: "供水覆盖 70%", value: () => city.stats.water, target: 70, unit: "%" },
+    ],
+  },
+  {
+    title: "第二章：基础服务",
+    summary: "用公园、学校和稳定就业让小镇不只是能住，而是值得留下。",
+    reward: "解锁消防站与城市事件系统。",
+    goals: [
+      { label: "人口达到 240", value: () => city.stats.population, target: 240 },
+      { label: "至少 1 座公园", value: () => countBuildings("park"), target: 1 },
+      { label: "至少 1 座学校", value: () => countBuildings("school"), target: 1 },
+      { label: "幸福度达到 70%", value: () => city.stats.happiness, target: 70, unit: "%" },
+    ],
+  },
+  {
+    title: "第三章：商业繁荣",
+    summary: "建立稳定税基，让商业、工业和居民通勤形成正循环。",
+    reward: "建筑升级成本降低，周报会显示事件影响。",
+    goals: [
+      { label: "商业达到 4 座", value: () => countBuildings("commercial"), target: 4 },
+      { label: "就业率达到 78%", value: () => city.stats.employmentRate, target: 78, unit: "%" },
+      { label: "资金达到 ¥60,000", value: () => city.stats.money, target: 60000, formatter: money },
+      { label: "周收入达到 ¥5,000", value: () => city.stats.income, target: 5000, formatter: money },
+    ],
+  },
+  {
+    title: "第四章：交通治理",
+    summary: "升级道路和服务节点，解决大城市化之前的通勤压力。",
+    reward: "进入最终宜居城市目标。",
+    goals: [
+      { label: "人口达到 520", value: () => city.stats.population, target: 520 },
+      { label: "樱花大道达到 8 格", value: () => countRoads("avenue"), target: 8 },
+      { label: "交通评分达到 76%", value: () => city.stats.traffic, target: 76, unit: "%" },
+      { label: "至少 1 座消防站", value: () => countBuildings("fire"), target: 1 },
+    ],
+  },
+  {
+    title: "第五章：宜居城市",
+    summary: "在规模、财政、幸福和污染之间取得平衡，完成 1.0 主线。",
+    reward: "主线完成，进入自由建设。",
+    goals: [
+      { label: "人口达到 800", value: () => city.stats.population, target: 800 },
+      { label: "幸福度达到 78%", value: () => city.stats.happiness, target: 78, unit: "%" },
+      { label: "污染低于 30", value: () => city.stats.pollution, target: 30, unit: "", max: true },
+      { label: "资金保持为正", value: () => city.stats.money, target: 0, formatter: money },
+    ],
+  },
+];
+
+const EVENT_DEFINITIONS = [
+  {
+    id: "brownout",
+    title: "用电紧张",
+    text: "供电不足让商店缩短营业时间，本周收入效率下降。",
+    duration: 3,
+    cooldown: 10,
+    trigger: () => city.stats.power < 65 && countBuildings("power") > 0,
+    incomeMultiplier: 0.92,
+    happinessDelta: -4,
+  },
+  {
+    id: "traffic_jam",
+    title: "早高峰拥堵",
+    text: "主街承压，维护队需要加班疏导交通。",
+    duration: 2,
+    cooldown: 8,
+    trigger: () => city.stats.traffic < 64 && city.stats.population > 120,
+    maintenanceDelta: 180,
+    happinessDelta: -3,
+  },
+  {
+    id: "fire_drill",
+    title: "消防演练",
+    text: "消防覆盖不足，居民要求补充安全设施。",
+    duration: 3,
+    cooldown: 12,
+    trigger: () => city.chapterIndex >= 2 && city.stats.fire < 35 && city.stats.population > 260,
+    maintenanceDelta: 260,
+    happinessDelta: -4,
+  },
+  {
+    id: "spring_fair",
+    title: "小镇集市",
+    text: "居民自发举办集市，商业收入与幸福度小幅提升。",
+    duration: 2,
+    cooldown: 14,
+    trigger: () => city.stats.happiness > 74 && city.stats.money > 0 && countBuildings("commercial") >= 2,
+    incomeDelta: 900,
+    happinessDelta: 3,
+  },
+];
+
+const ACHIEVEMENTS = [
+  { id: "first_save", title: "认真记账", text: "完成一次手动保存。", check: () => city.manualSaveCount > 0 },
+  { id: "first_upgrade", title: "旧屋新颜", text: "完成一次建筑升级。", check: () => city.upgradeCount > 0 },
+  { id: "hundred_people", title: "百人小镇", text: "人口达到 100。", check: () => city.stats.population >= 100 },
+  { id: "balanced_services", title: "水电双稳", text: "电力和供水同时达到 90%。", check: () => city.stats.power >= 90 && city.stats.water >= 90 },
+  { id: "main_story", title: "阳光小镇", text: "完成第五章主线。", check: () => city.completed },
+];
 
 const seasons = ["春季", "初夏", "盛夏", "秋日"];
 const DIRS = [
@@ -61,6 +209,84 @@ function randomChoice(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+function safeId(prefix = "id") {
+  return globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function countRoads(tier = null) {
+  return city.tiles.filter((tile) => tile.road && (!tier || tile.roadTier === tier)).length;
+}
+
+function countBuildings(type = null) {
+  return city.buildings.filter((building) => !type || building.type === type).length;
+}
+
+function levelMultiplier(kind, level = 1) {
+  const values = GAME_BALANCE.levelMultipliers[kind] || [1];
+  return values[Math.max(0, Math.min(values.length - 1, level - 1))];
+}
+
+function buildingLevel(building) {
+  return clamp(building?.level || 1, 1, MAX_BUILDING_LEVEL);
+}
+
+function buildingValue(building, key) {
+  const config = BUILDINGS[building.type];
+  const level = buildingLevel(building);
+  if (key === "capacity") return Math.round((config.capacity || 0) * levelMultiplier("capacity", level));
+  if (key === "jobs") return Math.round((config.jobs || 0) * levelMultiplier("jobs", level));
+  if (key === "tax") return Math.round((config.tax || 0) * levelMultiplier("tax", level));
+  if (key === "maintenance") return Math.round((config.maintenance || 0) * levelMultiplier("maintenance", level));
+  if (key === "radius") return Math.round((config.radius || 0) * levelMultiplier("service", level));
+  if (key === "supply") return Math.round((config.supply || 0) * levelMultiplier("supply", level));
+  if (key === "pollution") return Math.round((config.pollution || 0) * levelMultiplier("pollution", level));
+  return config[key] || 0;
+}
+
+function upgradeCost(building) {
+  if (!building || buildingLevel(building) >= MAX_BUILDING_LEVEL) return 0;
+  const discount = city.chapterIndex >= 3 ? 0.88 : 1;
+  return Math.round(BUILDINGS[building.type].cost * GAME_BALANCE.upgradeCostMultiplier * buildingLevel(building) * discount);
+}
+
+function currentChapter() {
+  return CHAPTERS[Math.min(city.chapterIndex, CHAPTERS.length - 1)];
+}
+
+function goalProgress(goal) {
+  const raw = goal.value();
+  const value = Number.isFinite(raw) ? raw : 0;
+  const ratio = goal.max ? clamp(1 - value / Math.max(1, goal.target), 0, 1) : clamp(value / Math.max(1, goal.target), 0, 1);
+  const complete = goal.max ? value <= goal.target : value >= goal.target;
+  return { value, ratio, complete };
+}
+
+function formatGoalValue(goal, value) {
+  if (goal.formatter) return goal.formatter(value);
+  return `${Math.round(value)}${goal.unit || ""}`;
+}
+
+function isToolUnlocked(tool) {
+  const config = BUILDINGS[tool];
+  if (!config || tool === "road" || tool === "bulldoze") return true;
+  return city.chapterIndex >= (config.unlockChapter || 0);
+}
+
+function eventImpact() {
+  return city.activeEvents.reduce(
+    (impact, active) => {
+      const event = EVENT_DEFINITIONS.find((item) => item.id === active.id);
+      if (!event) return impact;
+      impact.incomeMultiplier *= event.incomeMultiplier || 1;
+      impact.incomeDelta += event.incomeDelta || 0;
+      impact.maintenanceDelta += event.maintenanceDelta || 0;
+      impact.happinessDelta += event.happinessDelta || 0;
+      return impact;
+    },
+    { incomeMultiplier: 1, incomeDelta: 0, maintenanceDelta: 0, happinessDelta: 0 },
+  );
+}
+
 const els = {
   money: document.querySelector("#money"),
   population: document.querySelector("#population"),
@@ -81,6 +307,18 @@ const els = {
   selectedTitle: document.querySelector("#selectedTitle"),
   selectedInfo: document.querySelector("#selectedInfo"),
   weeklyReport: document.querySelector("#weeklyReport"),
+  reportDetails: document.querySelector("#reportDetails"),
+  chapterTitle: document.querySelector("#chapterTitle"),
+  chapterSummary: document.querySelector("#chapterSummary"),
+  questList: document.querySelector("#questList"),
+  unlockText: document.querySelector("#unlockText"),
+  eventList: document.querySelector("#eventList"),
+  achievementList: document.querySelector("#achievementList"),
+  saveStatus: document.querySelector("#saveStatus"),
+  saveButton: document.querySelector("#saveButton"),
+  newGameButton: document.querySelector("#newGameButton"),
+  resetButton: document.querySelector("#resetButton"),
+  upgradeButton: document.querySelector("#upgradeButton"),
   pauseButton: document.querySelector("#pauseButton"),
   speedButton: document.querySelector("#speedButton"),
   calendar: document.querySelector("#calendar"),
@@ -121,6 +359,23 @@ const city = {
   speed: 1,
   bankruptWeeks: 0,
   completed: false,
+  chapterIndex: 0,
+  completedChapters: [],
+  activeEvents: [],
+  eventCooldowns: {},
+  unlockedAchievements: [],
+  manualSaveCount: 0,
+  upgradeCount: 0,
+  lastAutoSaveWeek: 0,
+  lastSaveAt: null,
+  saveStatus: "尚未保存",
+  report: {
+    income: 0,
+    maintenance: 0,
+    net: 0,
+    eventImpact: 0,
+    taxes: 0,
+  },
   stats: {
     money: INITIAL_MONEY,
     income: 0,
@@ -187,6 +442,7 @@ const roadMaterials = {
   lane: new THREE.MeshStandardMaterial({ color: ROAD_TIERS.lane.color, roughness: 0.86 }),
   avenue: new THREE.MeshStandardMaterial({ color: ROAD_TIERS.avenue.color, roughness: 0.78 }),
 };
+const pixelTextures = {};
 const congestionMaterial = new THREE.MeshBasicMaterial({ color: 0xff8e72, transparent: true, opacity: 0.34 });
 const hoverMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
 const invalidMaterial = new THREE.MeshBasicMaterial({ color: 0xff7b7b, transparent: true, opacity: 0.42 });
@@ -371,13 +627,48 @@ function createRoof(width, depth, color) {
   return roof;
 }
 
+function makePixelTexture(type) {
+  if (pixelTextures[type]) return pixelTextures[type];
+  const palette = ASSET_MANIFEST.textures[type] || ["#ffffff", "#e5e5e5", "#cccccc", "#999999"];
+  const canvas = document.createElement("canvas");
+  canvas.width = ASSET_MANIFEST.textureSize;
+  canvas.height = ASSET_MANIFEST.textureSize;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = palette[0];
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < canvas.height; y += 4) {
+    for (let x = 0; x < canvas.width; x += 4) {
+      const index = Math.abs((x * 3 + y * 5 + type.length) % palette.length);
+      ctx.fillStyle = palette[index];
+      ctx.fillRect(x, y, 4, 4);
+    }
+  }
+  ctx.fillStyle = palette[3] || "#ffffff";
+  for (let x = 2; x < canvas.width; x += 6) ctx.fillRect(x, 5, 2, 3);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  pixelTextures[type] = texture;
+  return texture;
+}
+
+function buildingMaterial(type, color) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    map: makePixelTexture(type),
+    roughness: 0.78,
+  });
+}
+
 function createBuildingMesh(type) {
   const config = BUILDINGS[type];
   const group = new THREE.Group();
   const baseColor = config.color;
 
   if (type === "park") {
-    const mound = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.92, 0.22, 16), new THREE.MeshStandardMaterial({ color: 0x91db7b, roughness: 0.85 }));
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.92, 0.22, 16), buildingMaterial(type, 0x91db7b));
     mound.position.y = 0.18;
     group.add(mound);
     for (let i = 0; i < 4; i += 1) {
@@ -394,7 +685,7 @@ function createBuildingMesh(type) {
   }
 
   if (type === "water") {
-    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 12), new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.45 }));
+    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 12), buildingMaterial(type, baseColor));
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 12), new THREE.MeshStandardMaterial({ color: 0x8db7cf }));
     tank.position.y = 1.15;
     stem.position.y = 0.58;
@@ -403,7 +694,7 @@ function createBuildingMesh(type) {
   }
 
   if (type === "power") {
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.48, 1.2, 12), new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.65 }));
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.48, 1.2, 12), buildingMaterial(type, baseColor));
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 8), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffd66d, emissiveIntensity: 0.35 }));
     body.position.y = 0.68;
     cap.position.y = 1.42;
@@ -412,7 +703,7 @@ function createBuildingMesh(type) {
   }
 
   const height = buildingHeight(type);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.22, height, 1.16), new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.78 }));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.22, height, 1.16), buildingMaterial(type, baseColor));
   body.position.y = height / 2 + 0.08;
   group.add(body);
   const roofColor = type === "industrial" ? 0x7d9cab : type === "fire" ? 0xe96767 : type === "school" ? 0xf09b50 : 0xf58cab;
@@ -428,9 +719,36 @@ function createBuildingMesh(type) {
   return group;
 }
 
+function setBuildingLevelVisual(building) {
+  if (!building?.mesh) return;
+  const level = buildingLevel(building);
+  building.mesh.userData.level = level;
+  building.mesh.scale.setScalar(1 + (level - 1) * 0.12);
+  let badge = building.mesh.userData.badge;
+  if (!badge) {
+    badge = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.24, 0.07, 6),
+      new THREE.MeshStandardMaterial({ color: 0xfff2a8, emissive: 0xffb85f, emissiveIntensity: 0.18 }),
+    );
+    badge.position.set(0.52, buildingHeight(building.type) + 0.8, -0.48);
+    building.mesh.add(badge);
+    building.mesh.userData.badge = badge;
+  }
+  badge.visible = level > 1;
+  badge.scale.setScalar(0.8 + level * 0.16);
+}
+
 function canBuild(type, tile) {
   if (!tile) return { ok: false, reason: "请选择地图格子。" };
   if (type === "bulldoze") return tile.road || tile.buildingId ? { ok: true } : { ok: false, reason: "这里没有可拆除的内容。" };
+  if (!isToolUnlocked(type)) return { ok: false, reason: `${BUILDINGS[type].name}会在后续章节解锁。先完成当前目标。` };
+  if (type === "road" && tile.road) {
+    if (tile.roadTier === "lane" && city.selectedRoadTier === "avenue") {
+      const upgradePrice = ROAD_TIERS.avenue.cost - Math.round(ROAD_TIERS.lane.cost * 0.25);
+      return city.stats.money >= upgradePrice ? { ok: true, upgradePrice } : { ok: false, reason: `升级为樱花大道需要 ${money(upgradePrice)}。` };
+    }
+    return { ok: false, reason: "这里已经有道路了。可选择樱花大道升级普通道路。" };
+  }
   if (tile.buildingId || tile.road) return { ok: false, reason: "这个格子已经被占用了。" };
   const cost = type === "road" ? ROAD_TIERS[city.selectedRoadTier].cost : BUILDINGS[type].cost;
   if (city.stats.money < cost) return { ok: false, reason: "资金不足，先等待税收或拆除低效建筑。" };
@@ -442,6 +760,263 @@ function addMessage(message) {
   city.messages.unshift(message);
   city.messages = city.messages.slice(0, 4);
   els.weeklyReport.textContent = city.messages[0];
+}
+
+function updateAchievements() {
+  ACHIEVEMENTS.forEach((achievement) => {
+    if (city.unlockedAchievements.includes(achievement.id) || !achievement.check()) return;
+    city.unlockedAchievements.push(achievement.id);
+    addMessage(`成就解锁：${achievement.title}。${achievement.text}`);
+  });
+}
+
+function maybeCompleteChapter() {
+  const chapter = currentChapter();
+  if (!chapter || city.completed) return;
+  if (!chapter.goals.every((goal) => goalProgress(goal).complete)) return;
+  const completedTitle = chapter.title;
+  if (!city.completedChapters.includes(city.chapterIndex)) city.completedChapters.push(city.chapterIndex);
+  if (city.chapterIndex < CHAPTERS.length - 1) {
+    city.chapterIndex += 1;
+    addMessage(`${completedTitle}完成！${chapter.reward}`);
+  } else {
+    city.completed = true;
+    addMessage("主线完成！阳光小镇已经成为宜居、繁荣又有秩序的港湾。");
+  }
+}
+
+function updateEvents() {
+  city.activeEvents = city.activeEvents
+    .map((active) => ({ ...active, weeksLeft: active.weeksLeft - 1 }))
+    .filter((active) => active.weeksLeft > 0);
+
+  Object.keys(city.eventCooldowns).forEach((id) => {
+    city.eventCooldowns[id] -= 1;
+    if (city.eventCooldowns[id] <= 0) delete city.eventCooldowns[id];
+  });
+
+  EVENT_DEFINITIONS.forEach((event) => {
+    if (city.activeEvents.some((active) => active.id === event.id) || city.eventCooldowns[event.id]) return;
+    if (!event.trigger()) return;
+    city.activeEvents.push({ id: event.id, weeksLeft: event.duration });
+    city.eventCooldowns[event.id] = event.cooldown;
+    addMessage(`事件：${event.title}。${event.text}`);
+  });
+}
+
+function serializeGame() {
+  return {
+    version: SAVE_VERSION,
+    savedAt: new Date().toISOString(),
+    city: {
+      tiles: city.tiles
+        .filter((tile) => tile.road)
+        .map((tile) => ({ x: tile.x, z: tile.z, roadTier: tile.roadTier })),
+      buildings: city.buildings.map((building) => ({
+        id: building.id,
+        type: building.type,
+        x: building.x,
+        z: building.z,
+        age: building.age || 0,
+        level: buildingLevel(building),
+        active: building.active !== false,
+      })),
+      week: city.week,
+      money: city.stats.money,
+      chapterIndex: city.chapterIndex,
+      completedChapters: [...city.completedChapters],
+      activeEvents: city.activeEvents.map((event) => ({ ...event })),
+      eventCooldowns: { ...city.eventCooldowns },
+      unlockedAchievements: [...city.unlockedAchievements],
+      manualSaveCount: city.manualSaveCount,
+      upgradeCount: city.upgradeCount,
+      completed: city.completed,
+      messages: [...city.messages],
+    },
+  };
+}
+
+function migrateSave(rawSave) {
+  if (!rawSave || typeof rawSave !== "object") return null;
+  if (rawSave.version === SAVE_VERSION) return rawSave;
+  if (!rawSave.version && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
+  return null;
+}
+
+function clearCityContent() {
+  city.tiles.forEach((tile) => {
+    tile.type = "grass";
+    tile.buildingId = null;
+    tile.road = false;
+    tile.roadTier = null;
+    tile.roadMask = 0;
+    tile.trafficLoad = 0;
+    tile.trafficCapacity = 0;
+    tile.congestion = 0;
+    tile.coverage = {};
+    tile.pollution = 0;
+    if (tile.roadMesh) {
+      roadGroup.remove(tile.roadMesh);
+      tile.roadMesh = null;
+    }
+  });
+  buildingGroup.clear();
+  agentGroup.clear();
+  effectGroup.clear();
+  city.buildings = [];
+  city.residents = [];
+  city.visualAgents = [];
+  city.pathCache.clear();
+  city.roadVersion += 1;
+}
+
+function applySave(save) {
+  const migrated = migrateSave(save);
+  if (!migrated) return false;
+  const data = migrated.city || {};
+  clearCityContent();
+  city.week = Math.max(1, data.week || 1);
+  city.weekProgress = 0;
+  city.stats.money = Number.isFinite(data.money) ? data.money : INITIAL_MONEY;
+  city.chapterIndex = clamp(data.chapterIndex || 0, 0, CHAPTERS.length - 1);
+  city.completedChapters = Array.isArray(data.completedChapters) ? [...data.completedChapters] : [];
+  city.activeEvents = Array.isArray(data.activeEvents) ? data.activeEvents.map((event) => ({ ...event })) : [];
+  city.eventCooldowns = data.eventCooldowns && typeof data.eventCooldowns === "object" ? { ...data.eventCooldowns } : {};
+  city.unlockedAchievements = Array.isArray(data.unlockedAchievements) ? [...data.unlockedAchievements] : [];
+  city.manualSaveCount = data.manualSaveCount || 0;
+  city.upgradeCount = data.upgradeCount || 0;
+  city.completed = Boolean(data.completed);
+  city.messages = Array.isArray(data.messages) && data.messages.length ? [...data.messages].slice(0, 4) : ["存档已读取，欢迎回到晴日港。"];
+
+  (data.tiles || []).forEach((road) => {
+    const tile = getTile(road.x, road.z);
+    if (!tile) return;
+    tile.road = true;
+    tile.roadTier = ROAD_TIERS[road.roadTier] ? road.roadTier : "lane";
+    tile.type = "road";
+  });
+  refreshRoadMeshes();
+
+  (data.buildings || []).forEach((item) => {
+    if (!BUILDINGS[item.type] || item.type === "road" || item.type === "bulldoze") return;
+    const tile = getTile(item.x, item.z);
+    if (!tile || tile.road || tile.buildingId) return;
+    const mesh = createBuildingMesh(item.type);
+    const { x: wx, z: wz } = gridToWorld(item.x, item.z);
+    mesh.position.set(wx, 0.1, wz);
+    mesh.userData.tile = tile;
+    mesh.userData.birth = performance.now() / 1000 - 1;
+    const building = {
+      id: item.id || safeId("building"),
+      type: item.type,
+      x: item.x,
+      z: item.z,
+      age: item.age || 0,
+      level: clamp(item.level || 1, 1, MAX_BUILDING_LEVEL),
+      active: item.active !== false,
+      mesh,
+    };
+    tile.buildingId = building.id;
+    tile.type = building.type;
+    city.buildings.push(building);
+    buildingGroup.add(mesh);
+    setBuildingLevelVisual(building);
+  });
+
+  computeStats();
+  refreshVisualAgents();
+  updateAchievements();
+  city.saveStatus = `已读取 ${new Date(migrated.savedAt || Date.now()).toLocaleString()}`;
+  city.lastSaveAt = migrated.savedAt || null;
+  return true;
+}
+
+function saveGame(manual = false) {
+  if (manual) city.manualSaveCount += 1;
+  const save = serializeGame();
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    city.lastSaveAt = save.savedAt;
+    city.lastAutoSaveWeek = city.week;
+    city.saveStatus = `${manual ? "手动保存" : "自动保存"}：第 ${city.week} 周`;
+    if (manual) {
+      updateAchievements();
+      addMessage("游戏已保存。继续建设时可以放心试错。");
+    }
+    renderUI();
+    return true;
+  } catch (error) {
+    city.saveStatus = "保存失败：浏览器存储不可用";
+    addMessage("保存失败，请检查浏览器本地存储权限。");
+    renderUI();
+    return false;
+  }
+}
+
+function loadGameFromStorage() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    return applySave(JSON.parse(raw));
+  } catch (error) {
+    city.saveStatus = "存档损坏，已开启新游戏";
+    localStorage.removeItem(SAVE_KEY);
+    return false;
+  }
+}
+
+function resetMetaState() {
+  city.selectedTool = "road";
+  city.selectedRoadTier = "lane";
+  city.selectedTile = null;
+  city.week = 1;
+  city.weekProgress = 0;
+  city.bankruptWeeks = 0;
+  city.completed = false;
+  city.chapterIndex = 0;
+  city.completedChapters = [];
+  city.activeEvents = [];
+  city.eventCooldowns = {};
+  city.unlockedAchievements = [];
+  city.manualSaveCount = 0;
+  city.upgradeCount = 0;
+  city.lastAutoSaveWeek = 0;
+  city.lastSaveAt = null;
+  city.saveStatus = "新游戏";
+  city.stats = {
+    ...city.stats,
+    money: INITIAL_MONEY,
+    income: 0,
+    maintenance: 0,
+    population: 0,
+    capacity: 0,
+    jobs: 0,
+    reachableJobs: 0,
+    employmentRate: 0,
+    happiness: 68,
+    traffic: 100,
+    averageCongestion: 0,
+    unreachableResidents: 0,
+    power: 0,
+    water: 0,
+    education: 0,
+    fire: 0,
+    pollution: 0,
+  };
+  city.report = { income: 0, maintenance: 0, net: 0, eventImpact: 0, taxes: 0 };
+  city.messages = ["欢迎来到晴日港。先铺道路，再建住宅和基础设施吧。"];
+}
+
+function startNewGame({ keepStorage = false } = {}) {
+  clearCityContent();
+  resetMetaState();
+  if (!keepStorage) localStorage.removeItem(SAVE_KEY);
+  seedTown();
+  computeStats();
+  refreshVisualAgents();
+  maybeCompleteChapter();
+  updateAchievements();
+  renderUI();
 }
 
 function spawnBubble(text, x, z, color = 0xffb85f) {
@@ -487,12 +1062,24 @@ function place(type, x, z, options = {}) {
 
   if (type === "road") {
     const tier = options.tier || city.selectedRoadTier;
+    if (tile.road && tile.roadTier === "lane" && tier === "avenue") {
+      const upgradePrice = ROAD_TIERS.avenue.cost - Math.round(ROAD_TIERS.lane.cost * 0.25);
+      city.stats.money -= upgradePrice;
+      tile.roadTier = "avenue";
+      invalidateRoadNetwork();
+      spawnBubble("道路升级", x, z, 0xffb85f);
+      addMessage("普通道路升级为樱花大道，容量和幸福加成提升。");
+      maybeCompleteChapter();
+      renderUI();
+      return true;
+    }
     city.stats.money -= ROAD_TIERS[tier].cost;
     tile.road = true;
     tile.roadTier = tier;
     tile.type = "road";
     invalidateRoadNetwork();
     addMessage(`${ROAD_TIERS[tier].name}铺好了，居民有了新的通勤路线。`);
+    maybeCompleteChapter();
     renderUI();
     return true;
   }
@@ -506,20 +1093,24 @@ function place(type, x, z, options = {}) {
   mesh.userData.tile = tile;
   mesh.userData.birth = performance.now() / 1000;
   const building = {
-    id: crypto.randomUUID(),
+    id: safeId("building"),
     type,
     x,
     z,
     age: 0,
+    level: 1,
     active: true,
     mesh,
   };
+  setBuildingLevelVisual(building);
   tile.buildingId = building.id;
   tile.type = type;
   city.buildings.push(building);
   buildingGroup.add(mesh);
   spawnBubble(`+${config.name}`, x, z, 0x5aa27d);
   addMessage(`${config.name}建好了。居民会根据道路可达性决定是否使用它。`);
+  maybeCompleteChapter();
+  updateAchievements();
   renderUI();
   return true;
 }
@@ -552,6 +1143,41 @@ function bulldoze(tile) {
   tile.type = "grass";
   tile.coverage = {};
   tile.pollution = 0;
+  maybeCompleteChapter();
+  updateAchievements();
+}
+
+function upgradeSelectedBuilding() {
+  const tile = city.selectedTile;
+  if (!tile?.buildingId) {
+    addMessage("先选择一座建筑，再进行升级。");
+    renderUI();
+    return false;
+  }
+  const building = buildingById(tile.buildingId);
+  if (!building) return false;
+  if (buildingLevel(building) >= MAX_BUILDING_LEVEL) {
+    addMessage("这座建筑已经达到最高等级。");
+    renderUI();
+    return false;
+  }
+  const cost = upgradeCost(building);
+  if (city.stats.money < cost) {
+    addMessage(`升级需要 ${money(cost)}，当前资金不足。`);
+    renderUI();
+    return false;
+  }
+  city.stats.money -= cost;
+  building.level = buildingLevel(building) + 1;
+  city.upgradeCount += 1;
+  setBuildingLevelVisual(building);
+  spawnBubble(`Lv.${building.level}`, building.x, building.z, 0xffb85f);
+  addMessage(`${BUILDINGS[building.type].name}升级到 ${building.level} 级，容量、产出或服务能力提升。`);
+  computeStats();
+  maybeCompleteChapter();
+  updateAchievements();
+  renderUI();
+  return true;
 }
 
 function clearCoverageAndTraffic() {
@@ -567,16 +1193,17 @@ function spreadCoverage() {
   clearCoverageAndTraffic();
   city.buildings.forEach((building) => {
     const config = BUILDINGS[building.type];
-    if (config.service && config.radius) {
+    const radius = buildingValue(building, "radius");
+    if (config.service && radius) {
       city.tiles.forEach((tile) => {
-        const reach = Math.max(0, config.radius - distance(building, tile));
-        if (reach > 0) tile.coverage[config.service] = Math.max(tile.coverage[config.service] || 0, reach / config.radius);
+        const reach = Math.max(0, radius - distance(building, tile));
+        if (reach > 0) tile.coverage[config.service] = Math.max(tile.coverage[config.service] || 0, reach / radius);
       });
     }
     if (config.pollution) {
       city.tiles.forEach((tile) => {
         const reach = Math.max(0, 4 - distance(building, tile));
-        tile.pollution += reach * config.pollution;
+        tile.pollution += reach * buildingValue(building, "pollution");
       });
     }
   });
@@ -639,7 +1266,7 @@ function syncResidents(targetPopulation, homes) {
     const home = homes[city.residents.length % Math.max(1, homes.length)];
     if (!home) break;
     city.residents.push({
-      id: crypto.randomUUID(),
+      id: safeId("resident"),
       homeId: home.id,
       destinationId: null,
       route: null,
@@ -708,26 +1335,26 @@ function computeStats() {
   const capacity = residential.reduce((sum, building) => {
     const tile = getTile(building.x, building.z);
     const utilities = ((tile.coverage.power || 0) + (tile.coverage.water || 0)) / 2;
-    return sum + Math.round(BUILDINGS.residential.capacity * (0.35 + utilities * 0.65));
+    return sum + Math.round(buildingValue(building, "capacity") * (0.35 + utilities * 0.65));
   }, 0);
 
-  const utilityNeed = Math.max(1, activeBuildings.filter((building) => building.type !== "park").length * 28 + residential.length * 10);
-  const powerSupply = activeBuildings.filter((building) => building.type === "power").length * BUILDINGS.power.supply;
-  const waterSupply = activeBuildings.filter((building) => building.type === "water").length * BUILDINGS.water.supply;
+  const utilityNeed = Math.max(1, activeBuildings.filter((building) => building.type !== "park").length * GAME_BALANCE.utilityNeedPerBuilding + residential.length * GAME_BALANCE.utilityNeedPerHome);
+  const powerSupply = activeBuildings.filter((building) => building.type === "power").reduce((sum, building) => sum + buildingValue(building, "supply"), 0);
+  const waterSupply = activeBuildings.filter((building) => building.type === "water").reduce((sum, building) => sum + buildingValue(building, "supply"), 0);
   const power = clamp((powerSupply / utilityNeed) * 100);
   const water = clamp((waterSupply / utilityNeed) * 100);
 
   const baseHappiness = city.stats.happiness || 68;
   const targetPopulation = Math.round(capacity * clamp((baseHappiness - 22) / 68, 0.08, 1));
-  const populationStep = Math.sign(targetPopulation - city.stats.population) * Math.min(Math.abs(targetPopulation - city.stats.population), 28);
+  const populationStep = Math.sign(targetPopulation - city.stats.population) * Math.min(Math.abs(targetPopulation - city.stats.population), GAME_BALANCE.residentialGrowthStep);
   const nextPopulation = Math.max(0, city.stats.population + populationStep);
   syncResidents(nextPopulation, residential);
 
   const routeStats = assignResidentRoutes(residential, destinations);
   updateTrafficStats();
 
-  const reachableJobs = Math.min(routeStats.reachableResidents, commercial.length * BUILDINGS.commercial.jobs + industrial.length * BUILDINGS.industrial.jobs);
-  const jobs = commercial.length * BUILDINGS.commercial.jobs + industrial.length * BUILDINGS.industrial.jobs;
+  const jobs = [...commercial, ...industrial].reduce((sum, building) => sum + buildingValue(building, "jobs"), 0);
+  const reachableJobs = Math.min(routeStats.reachableResidents, jobs);
   const employmentRate = city.residents.length ? clamp((reachableJobs / city.residents.length) * 100) : 0;
 
   const coverageAverage = (key) => {
@@ -753,15 +1380,19 @@ function computeStats() {
   const jobPenalty = city.residents.length > 0 ? Math.max(0, 78 - employmentRate) * 0.2 : 4;
   const trafficPenalty = Math.max(0, 76 - city.stats.traffic) * 0.24 + routeStats.unreachableResidents * 0.45;
   const pollutionPenalty = Math.min(24, pollution * 0.16);
-  const happiness = clamp(72 + serviceBoost - utilityPenalty - jobPenalty - trafficPenalty - pollutionPenalty, 18, 100);
+  const impact = eventImpact();
+  const happiness = clamp(GAME_BALANCE.baseHappiness + serviceBoost - utilityPenalty - jobPenalty - trafficPenalty - pollutionPenalty + impact.happinessDelta, 18, 100);
 
   const incomeEfficiency = clamp(0.55 + city.stats.traffic / 180, 0.45, 1);
+  const residentialTax = routeStats.reachableResidents * BUILDINGS.residential.tax * (residential.length ? residential.reduce((sum, building) => sum + levelMultiplier("tax", buildingLevel(building)), 0) / residential.length : 1);
   const income =
-    routeStats.reachableResidents * BUILDINGS.residential.tax +
-    commercial.length * BUILDINGS.commercial.tax * 8 * incomeEfficiency +
-    industrial.length * BUILDINGS.industrial.tax * 8 * incomeEfficiency;
+    residentialTax +
+    commercial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency, 0) +
+    industrial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency, 0);
   const roadMaintenance = roads.reduce((sum, tile) => sum + ROAD_TIERS[tile.roadTier].maintenance, 0);
-  const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + BUILDINGS[building.type].maintenance, 0);
+  const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + buildingValue(building, "maintenance"), 0);
+  const adjustedIncome = income * impact.incomeMultiplier + impact.incomeDelta;
+  const adjustedMaintenance = maintenance + impact.maintenanceDelta;
 
   city.stats.population = city.residents.length;
   city.stats.capacity = capacity;
@@ -776,9 +1407,16 @@ function computeStats() {
   city.stats.pollution = pollution;
   city.stats.unreachableResidents = routeStats.unreachableResidents;
   city.stats.averageCommute = routeStats.averageCommute;
-  city.stats.income = Math.round(income);
-  city.stats.maintenance = Math.round(maintenance);
-  return { income, maintenance };
+  city.stats.income = Math.round(adjustedIncome);
+  city.stats.maintenance = Math.round(adjustedMaintenance);
+  city.report = {
+    income: Math.round(adjustedIncome),
+    maintenance: Math.round(adjustedMaintenance),
+    net: Math.round(adjustedIncome - adjustedMaintenance),
+    eventImpact: Math.round(adjustedIncome - income - (adjustedMaintenance - maintenance)),
+    taxes: Math.round(income),
+  };
+  return { income: adjustedIncome, maintenance: adjustedMaintenance };
 }
 
 function advanceWeek(count = 1) {
@@ -800,6 +1438,10 @@ function advanceWeek(count = 1) {
     } else {
       addMessage(`第 ${city.week} 周结算：收入 ${money(income)}，维护 ${money(maintenance)}。`);
     }
+    updateEvents();
+    maybeCompleteChapter();
+    updateAchievements();
+    if (!TEST_MODE && city.week - city.lastAutoSaveWeek >= AUTO_SAVE_INTERVAL_WEEKS) saveGame(false);
   }
   refreshVisualAgents();
   renderUI();
@@ -834,13 +1476,16 @@ function selectedDescription() {
     const road = nearestRoadForBuilding(building);
     const residents = city.residents.filter((resident) => resident.homeId === building.id || resident.destinationId === building.id);
     const active = road ? "道路可达" : "未连接道路";
-    return { title: `${config.name} (${active})`, text: `${config.hint} 关联居民/通勤 ${residents.length}。` };
+    const nextCost = upgradeCost(building);
+    const upgradeText = buildingLevel(building) >= MAX_BUILDING_LEVEL ? "已满级" : `升级需 ${money(nextCost)}`;
+    return { title: `${config.name} Lv.${buildingLevel(building)} (${active})`, text: `${config.hint} 关联居民/通勤 ${residents.length}。${upgradeText}。` };
   }
   return { title: `草地 (${tile.x + 1}, ${tile.z + 1})`, text: "可以在这里规划新的道路或建筑。" };
 }
 
 function renderUI() {
   const stats = city.stats;
+  const chapter = currentChapter();
   els.money.textContent = money(stats.money);
   els.population.textContent = `${Math.round(stats.population)} / ${stats.capacity}`;
   els.happiness.textContent = `${Math.round(stats.happiness)}%`;
@@ -852,8 +1497,8 @@ function renderUI() {
   els.calendar.textContent = `${seasons[Math.floor((city.week - 1) / 13) % seasons.length]} 第 ${city.week} 周`;
   els.cityMood.textContent = city.completed ? "庆祝达成" : stats.traffic < 65 ? "交通承压" : stats.happiness > 78 ? "晴朗成长" : stats.happiness > 50 ? "稳步建设" : "需要关照";
   els.goalCard.classList.toggle("is-complete", city.completed);
-  els.goalTitle.textContent = city.completed ? "阳光小镇已成型" : "目标：打造阳光小镇";
-  els.goalText.textContent = city.completed ? "目标已达成，但你仍可以继续扩建，让晴日港变得更可爱。" : "人口达到 800、幸福度 75%、资金保持为正，即可完成第一阶段建设。";
+  els.goalTitle.textContent = city.completed ? "阳光小镇已成型" : chapter.title;
+  els.goalText.textContent = city.completed ? "主线目标已达成，但你仍可以继续扩建，让晴日港变得更可爱。" : chapter.summary;
   els.trafficSummary.textContent = stats.traffic < 65 ? "通勤拥堵" : stats.unreachableResidents > 0 ? "道路断点" : "道路通畅";
   els.trafficDetails.textContent = `平均通勤 ${Math.round(stats.averageCommute || 0)} 格，平均拥堵 ${Math.round((stats.averageCongestion || 0) * 100)}%，移动体 ${city.visualAgents.length}/${MAX_VISUAL_AGENTS}。`;
   els.trafficSummary.closest(".traffic-card").classList.toggle("is-congested", stats.traffic < 70 || stats.unreachableResidents > 0);
@@ -861,6 +1506,14 @@ function renderUI() {
   const selected = selectedDescription();
   els.selectedTitle.textContent = selected.title;
   els.selectedInfo.textContent = selected.text;
+  const selectedBuilding = city.selectedTile?.buildingId ? buildingById(city.selectedTile.buildingId) : null;
+  const selectedUpgradeCost = selectedBuilding ? upgradeCost(selectedBuilding) : 0;
+  els.upgradeButton.disabled = !selectedBuilding || buildingLevel(selectedBuilding) >= MAX_BUILDING_LEVEL || city.stats.money < selectedUpgradeCost;
+  els.upgradeButton.textContent = selectedBuilding
+    ? buildingLevel(selectedBuilding) >= MAX_BUILDING_LEVEL
+      ? "建筑已满级"
+      : `升级建筑 ${money(selectedUpgradeCost)}`
+    : "升级建筑";
   els.currentTool.textContent = city.selectedTool === "road" ? `当前：${ROAD_TIERS[city.selectedRoadTier].name}` : `当前：${BUILDINGS[city.selectedTool].name}`;
   els.hintText.textContent = BUILDINGS[city.selectedTool].hint;
   els.toolCost.textContent =
@@ -877,12 +1530,43 @@ function renderUI() {
     const tool = button.dataset.tool;
     const cost = tool === "road" ? ROAD_TIERS[city.selectedRoadTier].cost : BUILDINGS[tool].cost;
     button.classList.toggle("active", tool === city.selectedTool);
-    button.disabled = tool !== "bulldoze" && city.stats.money < cost;
+    button.disabled = (tool !== "bulldoze" && city.stats.money < cost) || !isToolUnlocked(tool);
+    button.title = isToolUnlocked(tool) ? "" : "完成当前章节后解锁";
   });
 
   els.advisorList.innerHTML = advisorMessages()
     .map((item, index) => `<li class="${index === 0 && item.title !== "道路很顺畅" ? "is-warning" : ""}"><strong>${item.title}</strong><p>${item.text}</p></li>`)
     .join("");
+  els.chapterTitle.textContent = chapter.title;
+  els.chapterSummary.textContent = chapter.summary;
+  els.questList.innerHTML = chapter.goals
+    .map((goal) => {
+      const progress = goalProgress(goal);
+      return `<article class="quest-item">
+        <header><span>${goal.label}</span><b>${formatGoalValue(goal, progress.value)} / ${formatGoalValue(goal, goal.target)}</b></header>
+        <div class="quest-bar" style="--progress:${Math.round(progress.ratio * 100)}%"><i></i></div>
+      </article>`;
+    })
+    .join("");
+  els.unlockText.textContent = city.completed ? "主线完成：进入自由建设。" : chapter.reward;
+  els.eventList.innerHTML = city.activeEvents.length
+    ? city.activeEvents
+        .map((active) => {
+          const event = EVENT_DEFINITIONS.find((item) => item.id === active.id);
+          return `<span class="event-pill">${event?.title || active.id}：剩余 ${active.weeksLeft} 周</span>`;
+        })
+        .join("")
+    : "暂无事件";
+  els.achievementList.innerHTML = city.unlockedAchievements.length
+    ? city.unlockedAchievements
+        .map((id) => {
+          const achievement = ACHIEVEMENTS.find((item) => item.id === id);
+          return `<span class="achievement-pill">${achievement?.title || id}</span>`;
+        })
+        .join("")
+    : "暂无成就";
+  els.saveStatus.textContent = city.saveStatus;
+  els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 事件影响 ${money(city.report.eventImpact)}。`;
 }
 
 function updateHover() {
@@ -1052,6 +1736,19 @@ els.speedButton.addEventListener("click", () => {
   city.speed = city.speed === 1 ? 2 : city.speed === 2 ? 4 : 1;
   renderUI();
 });
+els.saveButton.addEventListener("click", () => saveGame(true));
+els.newGameButton.addEventListener("click", () => {
+  if (!window.confirm("开始新游戏会覆盖当前未保存进度，确定继续吗？")) return;
+  startNewGame();
+  saveGame(true);
+});
+els.resetButton.addEventListener("click", () => {
+  if (!window.confirm("清除本地存档并重新开始？")) return;
+  startNewGame();
+  addMessage("本地存档已清除，已开启新的晴日港。");
+  renderUI();
+});
+els.upgradeButton.addEventListener("click", () => upgradeSelectedBuilding());
 
 function resize() {
   const width = window.innerWidth;
@@ -1104,6 +1801,7 @@ function animateScene(elapsed, delta) {
 }
 
 function seedTown() {
+  clearCityContent();
   for (let x = 5; x <= 12; x += 1) place("road", x, 9, { tier: x >= 7 && x <= 10 ? "avenue" : "lane" });
   place("road", 8, 8);
   place("road", 8, 10);
@@ -1115,15 +1813,39 @@ function seedTown() {
   addMessage("晴日港有了一条主街。接下来补上电力、水塔和更多住宅吧。");
 }
 
+function bootGame() {
+  createPetals();
+  createTiles();
+  const loaded = !TEST_MODE && loadGameFromStorage();
+  if (!loaded) startNewGame({ keepStorage: TEST_MODE });
+  renderUI();
+  exposeTestApi();
+}
+
 function exposeTestApi() {
-  if (!new URLSearchParams(window.location.search).has("test")) return;
+  if (!TEST_MODE) return;
   window.sunnyTownTest = {
     place,
     advanceWeek,
+    saveGame,
+    loadSave: applySave,
+    serializeGame,
+    startNewGame,
+    upgradeSelectedBuilding,
+    setSelectedTile: (x, z) => {
+      city.selectedTile = getTile(x, z);
+      renderUI();
+    },
     findPathByRoads: (a, b) => findPath(getTile(a.x, a.z), getTile(b.x, b.z))?.map((tile) => ({ x: tile.x, z: tile.z })) || null,
     getState: () => ({
       stats: { ...city.stats },
       week: city.week,
+      chapterIndex: city.chapterIndex,
+      completed: city.completed,
+      saveStatus: city.saveStatus,
+      activeEvents: city.activeEvents.map((event) => ({ ...event })),
+      achievements: [...city.unlockedAchievements],
+      report: { ...city.report },
       selectedTool: city.selectedTool,
       selectedRoadTier: city.selectedRoadTier,
       roadVersion: city.roadVersion,
@@ -1131,6 +1853,7 @@ function exposeTestApi() {
       residentCount: city.residents.length,
       visualAgentCount: city.visualAgents.length,
       roadCount: city.tiles.filter((tile) => tile.road).length,
+      buildings: city.buildings.map((building) => ({ id: building.id, type: building.type, x: building.x, z: building.z, level: buildingLevel(building) })),
       roads: city.tiles
         .filter((tile) => tile.road)
         .map((tile) => ({ x: tile.x, z: tile.z, tier: tile.roadTier, mask: tile.roadMask, load: tile.trafficLoad, capacity: tile.trafficCapacity, congestion: tile.congestion })),
@@ -1147,11 +1870,7 @@ function exposeTestApi() {
 
 window.addEventListener("resize", resize);
 resize();
-createPetals();
-createTiles();
-seedTown();
-renderUI();
-exposeTestApi();
+bootGame();
 
 const clock = new THREE.Clock();
 

@@ -2,7 +2,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { root, pythonAppCommand } = require("./env");
+const { root, pythonAppCommand, spawnSpec } = require("./env");
 
 let serverUrl = "http://127.0.0.1:8765";
 
@@ -31,11 +31,17 @@ function waitForServer(deadlineMs = 15000) {
 
 function run(command, args, options = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
+    const spec = spawnSpec(command, args);
+    const child = spawn(spec.command, spec.args, {
       cwd: root,
       shell: false,
       stdio: "inherit",
+      windowsHide: true,
       ...options,
+    });
+    child.on("error", (error) => {
+      console.error(error.message);
+      resolve(1);
     });
     child.on("exit", (code) => resolve(code ?? 1));
   });
@@ -49,14 +55,31 @@ async function main() {
     throw new Error("Playwright is not installed. Run npm install first.");
   }
 
-  const server = spawn(app.command, app.args, {
-    cwd: root,
-    shell: false,
-    stdio: ["ignore", "pipe", "pipe"],
+  let server = null;
+  const serverAlreadyRunning = await new Promise((resolve) => {
+    const req = http.get(serverUrl, (res) => {
+      res.resume();
+      resolve(true);
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(false);
+    });
   });
 
-  server.stdout.on("data", (chunk) => process.stdout.write(chunk));
-  server.stderr.on("data", (chunk) => process.stderr.write(chunk));
+  if (!serverAlreadyRunning) {
+    const appSpec = spawnSpec(app.command, app.args);
+    server = spawn(appSpec.command, appSpec.args, {
+      cwd: root,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    server.stdout.on("data", (chunk) => process.stdout.write(chunk));
+    server.stderr.on("data", (chunk) => process.stderr.write(chunk));
+  }
 
   try {
     await waitForServer();
@@ -65,7 +88,7 @@ async function main() {
     });
     process.exitCode = code;
   } finally {
-    server.kill();
+    if (server) server.kill();
   }
 }
 
