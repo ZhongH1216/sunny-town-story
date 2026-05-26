@@ -454,6 +454,29 @@ button {
   font-weight: 800;
 }
 
+.event-pill {
+  display: grid;
+  gap: 3px;
+}
+
+.event-pill strong,
+.event-pill em,
+.event-pill small {
+  display: block;
+}
+
+.event-pill em {
+  color: #d26687;
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.event-pill small {
+  color: #6d8086;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .achievement-pill {
   background: #eef9e8;
 }

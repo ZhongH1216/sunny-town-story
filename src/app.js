@@ -5,7 +5,7 @@ const TILE_SIZE = 2.4;
 const WEEK_SECONDS = 4;
 const INITIAL_MONEY = 50000;
 const MAX_VISUAL_AGENTS = 60;
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 const SAVE_KEY = "sunny-town-story.save.v1";
 const AUTO_SAVE_INTERVAL_WEEKS = 4;
 const MAX_BUILDING_LEVEL = 3;
@@ -42,6 +42,9 @@ const ASSET_MANIFEST = {
     fire: ["#ff8b7f", "#ffd0ca", "#e65f5d", "#ffffff"],
     power: ["#ffe47a", "#fff3b8", "#f1b84b", "#ffffff"],
     water: ["#84c9ff", "#d5f2ff", "#5aaee7", "#ffffff"],
+    plaza: ["#f6d58b", "#fff0bf", "#8bcf9a", "#ffffff"],
+    station: ["#b9d8f2", "#fff4c0", "#5d8ca8", "#ffffff"],
+    lantern: ["#ffb1a6", "#ffe0ba", "#e95f64", "#ffffff"],
   },
 };
 
@@ -60,6 +63,9 @@ const BUILDINGS = {
   fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, color: 0xff8b7f, unlockChapter: 2, hint: "消防站降低城市风险，提高居民安心感。" },
   power: { name: "电力", cost: 3600, maintenance: 55, service: "power", radius: 6, supply: 320, color: 0xffe47a, unlockChapter: 0, hint: "电力设施为附近建筑供电。" },
   water: { name: "水塔", cost: 2800, maintenance: 45, service: "water", radius: 6, supply: 320, color: 0x84c9ff, unlockChapter: 0, hint: "水塔为附近建筑供水。" },
+  plaza: { name: "小广场", cost: 4200, maintenance: 38, service: "culture", radius: 4, color: 0xf6d58b, unlockChapter: 1, landmark: true, hint: "小广场会提升周边生活气氛，并让住宅更愿意升级。" },
+  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, color: 0xb9d8f2, unlockChapter: 3, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
+  lantern: { name: "祭典灯", cost: 2400, maintenance: 20, service: "culture", radius: 3, color: 0xffb1a6, unlockChapter: 2, landmark: true, hint: "祭典灯提升街区氛围，适合布置在住宅和商业之间。" },
   bulldoze: { name: "拆除", cost: 0, hint: "拆除建筑会退回少量资金，道路也可以拆。" },
 };
 
@@ -67,7 +73,8 @@ const CHAPTERS = [
   {
     title: "第一章：初建小镇",
     summary: "铺出主街，接上水电，让第一批居民稳定搬入。",
-    reward: "解锁公园与学校。",
+    reward: "解锁公园、学校与小广场，获得 ¥4,000 社区基金。",
+    bonus: { id: "community_fund", money: 4000, happiness: 1, text: "社区基金到账，小镇可以更从容地补齐服务。" },
     goals: [
       { label: "道路达到 10 格", value: () => countRoads(), target: 10 },
       { label: "人口达到 120", value: () => city.stats.population, target: 120 },
@@ -78,7 +85,8 @@ const CHAPTERS = [
   {
     title: "第二章：基础服务",
     summary: "用公园、学校和稳定就业让小镇不只是能住，而是值得留下。",
-    reward: "解锁消防站与城市事件系统。",
+    reward: "解锁消防站与祭典灯，获得 ¥6,000 服务基金。",
+    bonus: { id: "service_fund", money: 6000, happiness: 2, text: "服务基金到账，居民对生活圈更有信心。" },
     goals: [
       { label: "人口达到 240", value: () => city.stats.population, target: 240 },
       { label: "至少 1 座公园", value: () => countBuildings("park"), target: 1 },
@@ -89,7 +97,8 @@ const CHAPTERS = [
   {
     title: "第三章：商业繁荣",
     summary: "建立稳定税基，让商业、工业和居民通勤形成正循环。",
-    reward: "建筑升级成本降低，周报会显示事件影响。",
+    reward: "建筑升级成本降低 12%，周报会显示事件影响。",
+    bonus: { id: "upgrade_discount", money: 8000, upgradeDiscount: 0.12, text: "建设队熟练起来，后续建筑升级成本降低。" },
     goals: [
       { label: "商业达到 4 座", value: () => countBuildings("commercial"), target: 4 },
       { label: "就业率达到 78%", value: () => city.stats.employmentRate, target: 78, unit: "%" },
@@ -100,7 +109,8 @@ const CHAPTERS = [
   {
     title: "第四章：交通治理",
     summary: "升级道路和服务节点，解决大城市化之前的通勤压力。",
-    reward: "进入最终宜居城市目标。",
+    reward: "解锁小车站，主干交通评分永久 +4。",
+    bonus: { id: "traffic_program", money: 10000, trafficBonus: 4, text: "交通治理计划生效，主干路维护效率提升。" },
     goals: [
       { label: "人口达到 520", value: () => city.stats.population, target: 520 },
       { label: "樱花大道达到 8 格", value: () => countRoads("avenue"), target: 8 },
@@ -111,7 +121,8 @@ const CHAPTERS = [
   {
     title: "第五章：宜居城市",
     summary: "在规模、财政、幸福和污染之间取得平衡，完成 1.0 主线。",
-    reward: "主线完成，进入自由建设。",
+    reward: "主线完成，进入自由建设，获得晴日港纪念基金。",
+    bonus: { id: "finale_fund", money: 15000, happiness: 3, text: "晴日港进入自由建设阶段，居民准备长期留下。" },
     goals: [
       { label: "人口达到 800", value: () => city.stats.population, target: 800 },
       { label: "幸福度达到 78%", value: () => city.stats.happiness, target: 78, unit: "%" },
@@ -162,6 +173,36 @@ const EVENT_DEFINITIONS = [
     incomeDelta: 900,
     happinessDelta: 3,
   },
+  {
+    id: "rainy_week",
+    title: "梅雨周",
+    text: "连续降雨让道路维护成本上升，但水塔效率临时提高。",
+    duration: 2,
+    cooldown: 16,
+    trigger: () => city.week > 18 && city.stats.water > 75 && city.stats.population > 160,
+    maintenanceDelta: 220,
+    happinessDelta: -2,
+  },
+  {
+    id: "shop_boom",
+    title: "商店街热潮",
+    text: "商业街迎来客流高峰，本周税收明显增长。",
+    duration: 2,
+    cooldown: 18,
+    trigger: () => countBuildings("commercial") >= 4 && city.stats.traffic > 72,
+    incomeDelta: 1600,
+    happinessDelta: 2,
+  },
+  {
+    id: "moving_wave",
+    title: "搬家咨询潮",
+    text: "外地居民关注晴日港，住宅容量和服务稳定时会更快入住。",
+    duration: 3,
+    cooldown: 20,
+    trigger: () => city.stats.happiness > 78 && city.stats.power > 85 && city.stats.water > 85 && city.stats.capacity > city.stats.population + 30,
+    incomeDelta: 500,
+    happinessDelta: 1,
+  },
 ];
 
 const ACHIEVEMENTS = [
@@ -169,6 +210,10 @@ const ACHIEVEMENTS = [
   { id: "first_upgrade", title: "旧屋新颜", text: "完成一次建筑升级。", check: () => city.upgradeCount > 0 },
   { id: "hundred_people", title: "百人小镇", text: "人口达到 100。", check: () => city.stats.population >= 100 },
   { id: "balanced_services", title: "水电双稳", text: "电力和供水同时达到 90%。", check: () => city.stats.power >= 90 && city.stats.water >= 90 },
+  { id: "first_landmark", title: "有了地标", text: "建成第一座地标或装饰建筑。", check: () => city.buildings.some((building) => BUILDINGS[building.type]?.landmark) },
+  { id: "smooth_week", title: "顺畅一周", text: "人口超过 120 后仍保持交通评分 90%。", check: () => city.stats.population >= 120 && city.stats.traffic >= 90 },
+  { id: "profitable_month", title: "连续盈利", text: "连续 4 次周报净收益为正。", check: () => city.history.length >= 4 && city.history.slice(-4).every((item) => item.net > 0) },
+  { id: "chapter_two", title: "服务生活圈", text: "完成第二章。", check: () => city.completedChapters.includes(1) },
   { id: "main_story", title: "阳光小镇", text: "完成第五章主线。", check: () => city.completed },
 ];
 
@@ -221,6 +266,10 @@ function countBuildings(type = null) {
   return city.buildings.filter((building) => !type || building.type === type).length;
 }
 
+function countLandmarks() {
+  return city.buildings.filter((building) => BUILDINGS[building.type]?.landmark).length;
+}
+
 function levelMultiplier(kind, level = 1) {
   const values = GAME_BALANCE.levelMultipliers[kind] || [1];
   return values[Math.max(0, Math.min(values.length - 1, level - 1))];
@@ -245,7 +294,7 @@ function buildingValue(building, key) {
 
 function upgradeCost(building) {
   if (!building || buildingLevel(building) >= MAX_BUILDING_LEVEL) return 0;
-  const discount = city.chapterIndex >= 3 ? 0.88 : 1;
+  const discount = 1 - (city.modifiers.upgradeDiscount || 0);
   return Math.round(BUILDINGS[building.type].cost * GAME_BALANCE.upgradeCostMultiplier * buildingLevel(building) * discount);
 }
 
@@ -285,6 +334,15 @@ function eventImpact() {
     },
     { incomeMultiplier: 1, incomeDelta: 0, maintenanceDelta: 0, happinessDelta: 0 },
   );
+}
+
+function trend(current, previous) {
+  if (!Number.isFinite(previous)) return { delta: 0, label: "→0" };
+  const delta = Math.round(current - previous);
+  return {
+    delta,
+    label: `${delta > 0 ? "↑" : delta < 0 ? "↓" : "→"}${Math.abs(delta)}`,
+  };
 }
 
 const els = {
@@ -364,6 +422,13 @@ const city = {
   activeEvents: [],
   eventCooldowns: {},
   unlockedAchievements: [],
+  appliedBonuses: [],
+  modifiers: {
+    upgradeDiscount: 0,
+    trafficBonus: 0,
+    happinessBonus: 0,
+  },
+  history: [],
   manualSaveCount: 0,
   upgradeCount: 0,
   lastAutoSaveWeek: 0,
@@ -375,6 +440,12 @@ const city = {
     net: 0,
     eventImpact: 0,
     taxes: 0,
+    trends: {
+      population: "→0",
+      money: "→0",
+      traffic: "→0",
+      happiness: "→0",
+    },
   },
   stats: {
     money: INITIAL_MONEY,
@@ -614,7 +685,7 @@ function invalidateRoadNetwork() {
 }
 
 function buildingHeight(type) {
-  return { residential: 0.9, commercial: 1.05, industrial: 1.15, park: 0.25, school: 1.0, fire: 1.0, power: 1.25, water: 1.45 }[type] || 0.8;
+  return { residential: 0.9, commercial: 1.05, industrial: 1.15, park: 0.25, school: 1.0, fire: 1.0, power: 1.25, water: 1.45, plaza: 0.22, station: 0.8, lantern: 0.9 }[type] || 0.8;
 }
 
 function createRoof(width, depth, color) {
@@ -716,6 +787,39 @@ function createBuildingMesh(type) {
     awning.position.set(0, 0.55, 0.68);
     group.add(awning);
   }
+
+  if (type === "plaza") {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.96, 0.18, 8), buildingMaterial(type, baseColor));
+    base.position.y = 0.17;
+    const fountain = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.18, 16), new THREE.MeshStandardMaterial({ color: 0x84c9ff, roughness: 0.42, emissive: 0x245577, emissiveIntensity: 0.08 }));
+    fountain.position.y = 0.36;
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.82, 0.08), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
+    flag.position.set(-0.42, 0.66, -0.32);
+    group.add(base, fountain, flag);
+    return group;
+  }
+
+  if (type === "station") {
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 0.78), buildingMaterial(type, baseColor));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.16, 0.86), new THREE.MeshStandardMaterial({ color: 0x5d8ca8, roughness: 0.7 }));
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.3, 0.08), new THREE.MeshStandardMaterial({ color: 0xfff4c0, roughness: 0.55 }));
+    platform.position.y = 0.18;
+    roof.position.y = 0.9;
+    sign.position.set(0, 0.62, 0.45);
+    group.add(platform, roof, sign);
+    return group;
+  }
+
+  if (type === "lantern") {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.25, 8), new THREE.MeshStandardMaterial({ color: 0x7b5650, roughness: 0.72 }));
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.4, emissive: 0xff7a5e, emissiveIntensity: 0.28 }));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.16, 10), buildingMaterial(type, 0xffe0ba));
+    base.position.y = 0.16;
+    pole.position.y = 0.68;
+    lamp.position.y = 1.28;
+    group.add(base, pole, lamp);
+    return group;
+  }
   return group;
 }
 
@@ -724,6 +828,32 @@ function setBuildingLevelVisual(building) {
   const level = buildingLevel(building);
   building.mesh.userData.level = level;
   building.mesh.scale.setScalar(1 + (level - 1) * 0.12);
+  let upgradeCrown = building.mesh.userData.upgradeCrown;
+  if (!upgradeCrown) {
+    upgradeCrown = new THREE.Group();
+    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xfff2a8, emissive: 0xffb85f, emissiveIntensity: 0.12, roughness: 0.48 });
+    const left = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), trimMaterial);
+    const right = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), trimMaterial);
+    const center = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.16), trimMaterial);
+    left.position.set(-0.36, 0, 0);
+    right.position.set(0.36, 0, 0);
+    center.position.set(0, 0.02, 0);
+    upgradeCrown.add(left, right, center);
+    upgradeCrown.position.set(0, buildingHeight(building.type) + 0.78, 0.42);
+    building.mesh.add(upgradeCrown);
+    building.mesh.userData.upgradeCrown = upgradeCrown;
+  }
+  upgradeCrown.visible = level > 1 && !BUILDINGS[building.type]?.landmark;
+  upgradeCrown.scale.set(1 + (level - 2) * 0.24, 1 + (level - 2) * 0.18, 1);
+
+  let extraFloor = building.mesh.userData.extraFloor;
+  if (!extraFloor && level >= 3 && !BUILDINGS[building.type]?.landmark) {
+    extraFloor = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.34, 0.86), buildingMaterial(building.type, BUILDINGS[building.type].color));
+    extraFloor.position.y = buildingHeight(building.type) + 0.42;
+    building.mesh.add(extraFloor);
+    building.mesh.userData.extraFloor = extraFloor;
+  }
+  if (extraFloor) extraFloor.visible = level >= 3;
   let badge = building.mesh.userData.badge;
   if (!badge) {
     badge = new THREE.Mesh(
@@ -762,6 +892,20 @@ function addMessage(message) {
   els.weeklyReport.textContent = city.messages[0];
 }
 
+function applyChapterBonus(chapterIndex, chapter) {
+  const bonus = chapter.bonus;
+  if (!bonus || city.appliedBonuses.includes(bonus.id)) return;
+  city.appliedBonuses.push(bonus.id);
+  if (bonus.money) {
+    city.stats.money += bonus.money;
+    spawnBubble(`+${money(bonus.money)}`, 9, 9, 0xffb85f);
+  }
+  if (bonus.happiness) city.modifiers.happinessBonus += bonus.happiness;
+  if (bonus.upgradeDiscount) city.modifiers.upgradeDiscount = Math.max(city.modifiers.upgradeDiscount, bonus.upgradeDiscount);
+  if (bonus.trafficBonus) city.modifiers.trafficBonus += bonus.trafficBonus;
+  addMessage(`${chapter.title}奖励：${bonus.text || chapter.reward}`);
+}
+
 function updateAchievements() {
   ACHIEVEMENTS.forEach((achievement) => {
     if (city.unlockedAchievements.includes(achievement.id) || !achievement.check()) return;
@@ -776,6 +920,7 @@ function maybeCompleteChapter() {
   if (!chapter.goals.every((goal) => goalProgress(goal).complete)) return;
   const completedTitle = chapter.title;
   if (!city.completedChapters.includes(city.chapterIndex)) city.completedChapters.push(city.chapterIndex);
+  applyChapterBonus(city.chapterIndex, chapter);
   if (city.chapterIndex < CHAPTERS.length - 1) {
     city.chapterIndex += 1;
     addMessage(`${completedTitle}完成！${chapter.reward}`);
@@ -828,6 +973,9 @@ function serializeGame() {
       activeEvents: city.activeEvents.map((event) => ({ ...event })),
       eventCooldowns: { ...city.eventCooldowns },
       unlockedAchievements: [...city.unlockedAchievements],
+      appliedBonuses: [...city.appliedBonuses],
+      modifiers: { ...city.modifiers },
+      history: city.history.map((item) => ({ ...item })),
       manualSaveCount: city.manualSaveCount,
       upgradeCount: city.upgradeCount,
       completed: city.completed,
@@ -839,6 +987,7 @@ function serializeGame() {
 function migrateSave(rawSave) {
   if (!rawSave || typeof rawSave !== "object") return null;
   if (rawSave.version === SAVE_VERSION) return rawSave;
+  if (rawSave.version === 1 && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
   if (!rawSave.version && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
   return null;
 }
@@ -883,6 +1032,13 @@ function applySave(save) {
   city.activeEvents = Array.isArray(data.activeEvents) ? data.activeEvents.map((event) => ({ ...event })) : [];
   city.eventCooldowns = data.eventCooldowns && typeof data.eventCooldowns === "object" ? { ...data.eventCooldowns } : {};
   city.unlockedAchievements = Array.isArray(data.unlockedAchievements) ? [...data.unlockedAchievements] : [];
+  city.appliedBonuses = Array.isArray(data.appliedBonuses) ? [...data.appliedBonuses] : [];
+  city.modifiers = {
+    upgradeDiscount: clamp(data.modifiers?.upgradeDiscount || 0, 0, 0.5),
+    trafficBonus: data.modifiers?.trafficBonus || 0,
+    happinessBonus: data.modifiers?.happinessBonus || 0,
+  };
+  city.history = Array.isArray(data.history) ? data.history.slice(-24).map((item) => ({ ...item })) : [];
   city.manualSaveCount = data.manualSaveCount || 0;
   city.upgradeCount = data.upgradeCount || 0;
   city.completed = Boolean(data.completed);
@@ -978,6 +1134,13 @@ function resetMetaState() {
   city.activeEvents = [];
   city.eventCooldowns = {};
   city.unlockedAchievements = [];
+  city.appliedBonuses = [];
+  city.modifiers = {
+    upgradeDiscount: 0,
+    trafficBonus: 0,
+    happinessBonus: 0,
+  };
+  city.history = [];
   city.manualSaveCount = 0;
   city.upgradeCount = 0;
   city.lastAutoSaveWeek = 0;
@@ -1003,7 +1166,14 @@ function resetMetaState() {
     fire: 0,
     pollution: 0,
   };
-  city.report = { income: 0, maintenance: 0, net: 0, eventImpact: 0, taxes: 0 };
+  city.report = {
+    income: 0,
+    maintenance: 0,
+    net: 0,
+    eventImpact: 0,
+    taxes: 0,
+    trends: { population: "→0", money: "→0", traffic: "→0", happiness: "→0" },
+  };
   city.messages = ["欢迎来到晴日港。先铺道路，再建住宅和基础设施吧。"];
 }
 
@@ -1371,17 +1541,20 @@ function computeStats() {
   const education = coverageAverage("education");
   const fire = coverageAverage("fire");
   const park = coverageAverage("park");
+  const culture = coverageAverage("culture");
+  const transport = coverageAverage("transport");
   const pollution = residential.length
     ? residential.reduce((sum, building) => sum + getTile(building.x, building.z).pollution, 0) / residential.length
     : industrial.length * 4;
   const avenueBoost = roads.filter((tile) => tile.roadTier === "avenue").length * ROAD_TIERS.avenue.happiness;
-  const serviceBoost = park * 0.16 + education * 0.09 + fire * 0.07 + Math.min(8, avenueBoost);
+  const serviceBoost = park * 0.16 + education * 0.09 + fire * 0.07 + culture * 0.08 + Math.min(8, avenueBoost);
   const utilityPenalty = Math.max(0, 100 - power) * 0.09 + Math.max(0, 100 - water) * 0.09;
   const jobPenalty = city.residents.length > 0 ? Math.max(0, 78 - employmentRate) * 0.2 : 4;
-  const trafficPenalty = Math.max(0, 76 - city.stats.traffic) * 0.24 + routeStats.unreachableResidents * 0.45;
+  const transportRelief = transport * 0.08 + city.modifiers.trafficBonus;
+  const trafficPenalty = Math.max(0, 76 - city.stats.traffic - transportRelief) * 0.24 + routeStats.unreachableResidents * 0.45;
   const pollutionPenalty = Math.min(24, pollution * 0.16);
   const impact = eventImpact();
-  const happiness = clamp(GAME_BALANCE.baseHappiness + serviceBoost - utilityPenalty - jobPenalty - trafficPenalty - pollutionPenalty + impact.happinessDelta, 18, 100);
+  const happiness = clamp(GAME_BALANCE.baseHappiness + serviceBoost - utilityPenalty - jobPenalty - trafficPenalty - pollutionPenalty + impact.happinessDelta + city.modifiers.happinessBonus, 18, 100);
 
   const incomeEfficiency = clamp(0.55 + city.stats.traffic / 180, 0.45, 1);
   const residentialTax = routeStats.reachableResidents * BUILDINGS.residential.tax * (residential.length ? residential.reduce((sum, building) => sum + levelMultiplier("tax", buildingLevel(building)), 0) / residential.length : 1);
@@ -1404,6 +1577,8 @@ function computeStats() {
   city.stats.water = water;
   city.stats.education = education;
   city.stats.fire = fire;
+  city.stats.culture = culture;
+  city.stats.transport = transport;
   city.stats.pollution = pollution;
   city.stats.unreachableResidents = routeStats.unreachableResidents;
   city.stats.averageCommute = routeStats.averageCommute;
@@ -1415,6 +1590,7 @@ function computeStats() {
     net: Math.round(adjustedIncome - adjustedMaintenance),
     eventImpact: Math.round(adjustedIncome - income - (adjustedMaintenance - maintenance)),
     taxes: Math.round(income),
+    trends: city.report?.trends || { population: "→0", money: "→0", traffic: "→0", happiness: "→0" },
   };
   return { income: adjustedIncome, maintenance: adjustedMaintenance };
 }
@@ -1423,8 +1599,25 @@ function advanceWeek(count = 1) {
   for (let i = 0; i < count; i += 1) {
     const previousMoney = city.stats.money;
     const previousPopulation = city.stats.population;
+    const previousTraffic = city.stats.traffic;
+    const previousHappiness = city.stats.happiness;
     const { income, maintenance } = computeStats();
     city.stats.money += Math.round(income - maintenance);
+    city.report.trends = {
+      population: trend(city.stats.population, previousPopulation).label,
+      money: trend(city.stats.money, previousMoney).label,
+      traffic: trend(city.stats.traffic, previousTraffic).label,
+      happiness: trend(city.stats.happiness, previousHappiness).label,
+    };
+    city.history.push({
+      week: city.week,
+      population: city.stats.population,
+      money: Math.round(city.stats.money),
+      traffic: Math.round(city.stats.traffic),
+      happiness: Math.round(city.stats.happiness),
+      net: Math.round(income - maintenance),
+    });
+    city.history = city.history.slice(-24);
     city.week += 1;
     city.bankruptWeeks = city.stats.money < -10000 ? city.bankruptWeeks + 1 : 0;
     if (city.stats.money > previousMoney) spawnBubble(`+${money(city.stats.money - previousMoney)}`, 9, 9, 0xffb85f);
@@ -1453,6 +1646,8 @@ function advisorMessages() {
   if (city.stats.traffic < 70) messages.push({ title: "道路开始拥堵", text: "通勤变慢了。可以铺设樱花大道或增加支路分流。" });
   if (city.stats.power < 80) messages.push({ title: "电力不足", text: "住宅和商店需要稳定供电。建一座电力设施并靠近道路。" });
   if (city.stats.water < 80) messages.push({ title: "供水不足", text: "水塔覆盖不足会限制人口成长。" });
+  if (city.stats.culture < 30 && city.chapterIndex >= 1 && city.stats.population > 150) messages.push({ title: "街区氛围不足", text: "小广场和祭典灯能提升生活气氛，也能帮助住宅升级。" });
+  if (city.stats.transport < 25 && city.chapterIndex >= 3 && city.stats.traffic < 78) messages.push({ title: "需要通勤节点", text: "小车站能缓解主街通勤压力，适合放在樱花大道旁。" });
   if (city.stats.employmentRate < 72 && city.stats.population > 80) messages.push({ title: "岗位不可达", text: "增加商业/工业，并确保居民能沿道路到达岗位。" });
   if (city.stats.pollution > 38) messages.push({ title: "污染偏高", text: "工业区离住宅太近了，可以用公园缓冲。" });
   if (city.stats.education < 35 && city.stats.population > 150) messages.push({ title: "教育覆盖低", text: "学校会让居民更安心，也能提升长期幸福度。" });
@@ -1553,7 +1748,7 @@ function renderUI() {
     ? city.activeEvents
         .map((active) => {
           const event = EVENT_DEFINITIONS.find((item) => item.id === active.id);
-          return `<span class="event-pill">${event?.title || active.id}：剩余 ${active.weeksLeft} 周</span>`;
+          return `<span class="event-pill"><strong>${event?.title || active.id}</strong><em>剩余 ${active.weeksLeft} 周</em><small>${event?.text || ""}</small></span>`;
         })
         .join("")
     : "暂无事件";
@@ -1566,7 +1761,7 @@ function renderUI() {
         .join("")
     : "暂无成就";
   els.saveStatus.textContent = city.saveStatus;
-  els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 事件影响 ${money(city.report.eventImpact)}。`;
+  els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 人口 ${city.report.trends.population} / 资金 ${city.report.trends.money} / 交通 ${city.report.trends.traffic} / 幸福 ${city.report.trends.happiness}。`;
 }
 
 function updateHover() {
@@ -1845,11 +2040,15 @@ function exposeTestApi() {
       saveStatus: city.saveStatus,
       activeEvents: city.activeEvents.map((event) => ({ ...event })),
       achievements: [...city.unlockedAchievements],
+      appliedBonuses: [...city.appliedBonuses],
+      modifiers: { ...city.modifiers },
+      history: city.history.map((item) => ({ ...item })),
       report: { ...city.report },
       selectedTool: city.selectedTool,
       selectedRoadTier: city.selectedRoadTier,
       roadVersion: city.roadVersion,
       buildingCount: city.buildings.length,
+      landmarkCount: countLandmarks(),
       residentCount: city.residents.length,
       visualAgentCount: city.visualAgents.length,
       roadCount: city.tiles.filter((tile) => tile.road).length,

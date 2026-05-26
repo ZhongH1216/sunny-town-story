@@ -190,8 +190,37 @@ test("save data restores roads, buildings, chapters and upgrades", async ({ page
   expect(after.week).toBe(save.city.week);
 });
 
+test("version 1 saves migrate into the P2 save format", async ({ page }) => {
+  await page.goto("/?test=1");
+  const legacySave = await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 1, 1, { tier: "lane" });
+    t.place("residential", 1, 2);
+    t.advanceWeek(1);
+    const save = t.serializeGame();
+    save.version = 1;
+    delete save.city.appliedBonuses;
+    delete save.city.modifiers;
+    delete save.city.history;
+    return save;
+  });
+
+  const restored = await page.evaluate((snapshot) => {
+    window.sunnyTownTest.startNewGame({ keepStorage: true });
+    return window.sunnyTownTest.loadSave(snapshot);
+  }, legacySave);
+
+  const after = await state(page);
+  expect(restored).toBe(true);
+  expect(after.roads.some((road) => road.x === 1 && road.z === 1)).toBe(true);
+  expect(after.buildings.some((building) => building.type === "residential")).toBe(true);
+  expect(after.modifiers.upgradeDiscount).toBe(0);
+  expect(after.history).toEqual([]);
+});
+
 test("chapter goals unlock service buildings and achievements", async ({ page }) => {
   await page.goto("/?test=1");
+  const before = await state(page);
   await page.evaluate(() => {
     const t = window.sunnyTownTest;
     t.setMoney(250000);
@@ -212,8 +241,43 @@ test("chapter goals unlock service buildings and achievements", async ({ page })
   });
   const after = await state(page);
   expect(after.chapterIndex).toBeGreaterThanOrEqual(1);
+  expect(after.appliedBonuses).toContain("community_fund");
+  expect(after.stats.money).toBeGreaterThan(before.stats.money);
   await expect(page.locator("[data-tool='park']")).toBeEnabled();
+  await expect(page.locator("[data-tool='plaza']")).toBeEnabled();
   expect(after.achievements).toContain("hundred_people");
+});
+
+test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(300000);
+    for (let x = 4; x <= 14; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("road", 8, 7, { tier: "avenue" });
+    t.place("power", 5, 7);
+    t.place("water", 6, 7);
+    t.place("residential", 4, 5);
+    t.place("residential", 5, 5);
+    t.place("residential", 7, 7);
+    t.place("residential", 8, 5);
+    t.place("residential", 9, 7);
+    t.place("residential", 12, 7);
+    t.place("residential", 13, 7);
+    t.place("commercial", 10, 7);
+    t.place("industrial", 11, 7);
+    t.advanceWeek(24);
+    t.place("plaza", 14, 7);
+    t.advanceWeek(1);
+  });
+
+  const after = await state(page);
+  expect(after.landmarkCount).toBeGreaterThanOrEqual(1);
+  expect(after.achievements).toContain("first_landmark");
+  expect(after.history.length).toBeGreaterThan(0);
+  expect(after.report.trends.population).toMatch(/[↑↓→]/);
+  await expect(page.locator("#reportDetails")).toContainText("人口");
+  await expect(page.locator("#achievementList")).toContainText("有了地标");
 });
 
 test("manual saves unlock an achievement and update save status", async ({ page }) => {
