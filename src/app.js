@@ -58,15 +58,50 @@ const BUILDINGS = {
   residential: { name: "住宅", cost: 900, maintenance: 8, tax: 38, capacity: 38, color: 0xffb8c9, unlockChapter: 0, hint: "居民会从住宅出发，沿道路前往工作或消费地点。" },
   commercial: { name: "商业", cost: 1300, maintenance: 18, tax: 72, jobs: 42, color: 0xffd36f, unlockChapter: 0, hint: "商业提供岗位和税收，也会吸引居民消费。" },
   industrial: { name: "工业", cost: 1600, maintenance: 22, tax: 92, jobs: 64, pollution: 14, color: 0x9fc0cf, unlockChapter: 0, hint: "工业岗位多、税收高，但会制造污染和交通压力。" },
-  park: { name: "公园", cost: 1100, maintenance: 18, service: "park", radius: 3, color: 0x8ddf91, unlockChapter: 1, hint: "公园会提升附近住宅幸福度。" },
-  school: { name: "学校", cost: 2600, maintenance: 42, service: "education", radius: 4, color: 0xffc36e, unlockChapter: 1, hint: "学校提升教育覆盖和长期幸福度。" },
-  fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, color: 0xff8b7f, unlockChapter: 2, hint: "消防站降低城市风险，提高居民安心感。" },
+  park: { name: "公园", cost: 1100, maintenance: 18, service: "park", radius: 3, color: 0x8ddf91, unlockChapter: 1, unlock: { chapter: 1, population: 120 }, hint: "公园会提升附近住宅幸福度。" },
+  school: { name: "学校", cost: 2600, maintenance: 42, service: "education", radius: 4, color: 0xffc36e, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 58 }, hint: "学校提升教育覆盖和长期幸福度。" },
+  fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, color: 0xff8b7f, unlockChapter: 2, unlock: { chapter: 2, population: 240, happiness: 64, money: 3000 }, hint: "消防站降低城市风险，提高居民安心感。" },
   power: { name: "电力", cost: 3600, maintenance: 55, service: "power", radius: 6, supply: 320, color: 0xffe47a, unlockChapter: 0, hint: "电力设施为附近建筑供电。" },
   water: { name: "水塔", cost: 2800, maintenance: 45, service: "water", radius: 6, supply: 320, color: 0x84c9ff, unlockChapter: 0, hint: "水塔为附近建筑供水。" },
-  plaza: { name: "小广场", cost: 4200, maintenance: 38, service: "culture", radius: 4, color: 0xf6d58b, unlockChapter: 1, landmark: true, hint: "小广场会提升周边生活气氛，并让住宅更愿意升级。" },
-  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, color: 0xb9d8f2, unlockChapter: 3, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
-  lantern: { name: "祭典灯", cost: 2400, maintenance: 20, service: "culture", radius: 3, color: 0xffb1a6, unlockChapter: 2, landmark: true, hint: "祭典灯提升街区氛围，适合布置在住宅和商业之间。" },
+  plaza: { name: "小广场", cost: 4200, maintenance: 38, service: "culture", radius: 4, color: 0xf6d58b, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 60, money: 3000 }, landmark: true, hint: "小广场会提升周边生活气氛，并让住宅更愿意升级。" },
+  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, color: 0xb9d8f2, unlockChapter: 3, unlock: { chapter: 3, population: 420, traffic: 65, money: 12000 }, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
+  lantern: { name: "祭典灯", cost: 2400, maintenance: 20, service: "culture", radius: 3, color: 0xffb1a6, unlockChapter: 2, unlock: { chapter: 2, population: 260, happiness: 68, money: 2400 }, landmark: true, hint: "祭典灯提升街区氛围，适合布置在住宅和商业之间。" },
   bulldoze: { name: "拆除", cost: 0, hint: "拆除建筑会退回少量资金，道路也可以拆。" },
+};
+
+const UPGRADE_RULES = {
+  residential: {
+    2: { happiness: 58, power: 60, water: 60 },
+    3: { happiness: 74, power: 82, water: 82, culture: 25, education: 30 },
+  },
+  commercial: {
+    2: { employment: 58, traffic: 62, power: 60 },
+    3: { employment: 75, traffic: 76, culture: 20, money: 9000 },
+  },
+  industrial: {
+    2: { traffic: 58, power: 70, water: 45 },
+    3: { traffic: 72, fire: 35, money: 10000 },
+  },
+  park: {
+    2: { happiness: 66 },
+    3: { happiness: 76, culture: 22 },
+  },
+  school: {
+    2: { population: 220, happiness: 64 },
+    3: { population: 420, education: 55, money: 12000 },
+  },
+  fire: {
+    2: { population: 280, money: 7000 },
+    3: { population: 520, fire: 55, traffic: 70 },
+  },
+  power: {
+    2: { population: 180, money: 6500 },
+    3: { population: 430, traffic: 65 },
+  },
+  water: {
+    2: { population: 160, money: 5500 },
+    3: { population: 400, happiness: 70 },
+  },
 };
 
 const CHAPTERS = [
@@ -203,6 +238,36 @@ const EVENT_DEFINITIONS = [
     incomeDelta: 500,
     happinessDelta: 1,
   },
+  {
+    id: "festival_day",
+    title: "港湾祭典",
+    text: "地标与街区氛围带来了周末祭典，商业税收和幸福度一起上扬。",
+    duration: 2,
+    cooldown: 22,
+    trigger: () => city.chapterIndex >= 2 && countLandmarks() >= 2 && city.stats.culture > 35 && city.stats.happiness > 72,
+    incomeDelta: 1800,
+    happinessDelta: 4,
+  },
+  {
+    id: "fire_risk",
+    title: "消防隐患",
+    text: "人口和工业规模上升后，消防覆盖不足开始拉高维护压力。",
+    duration: 3,
+    cooldown: 16,
+    trigger: () => city.stats.population > 360 && city.stats.fire < 45 && countBuildings("industrial") >= 2,
+    maintenanceDelta: 420,
+    happinessDelta: -5,
+  },
+  {
+    id: "industry_slowdown",
+    title: "商业低迷",
+    text: "通勤和就业承压，店铺客流下降，需要补充岗位或改善道路。",
+    duration: 2,
+    cooldown: 18,
+    trigger: () => city.stats.population > 300 && (city.stats.employmentRate < 68 || city.stats.traffic < 58),
+    incomeMultiplier: 0.88,
+    happinessDelta: -3,
+  },
 ];
 
 const ACHIEVEMENTS = [
@@ -214,6 +279,10 @@ const ACHIEVEMENTS = [
   { id: "smooth_week", title: "顺畅一周", text: "人口超过 120 后仍保持交通评分 90%。", check: () => city.stats.population >= 120 && city.stats.traffic >= 90 },
   { id: "profitable_month", title: "连续盈利", text: "连续 4 次周报净收益为正。", check: () => city.history.length >= 4 && city.history.slice(-4).every((item) => item.net > 0) },
   { id: "chapter_two", title: "服务生活圈", text: "完成第二章。", check: () => city.completedChapters.includes(1) },
+  { id: "builder_grade", title: "升级街区", text: "累计完成 5 次建筑升级。", check: () => city.upgradeCount >= 5 },
+  { id: "festival_core", title: "节庆核心", text: "建成 2 座地标并让文化覆盖达到 35%。", check: () => countLandmarks() >= 2 && city.stats.culture >= 35 },
+  { id: "transit_ready", title: "通勤节点", text: "建成小车站并让交通评分保持 76%。", check: () => countBuildings("station") >= 1 && city.stats.traffic >= 76 },
+  { id: "five_hundred_people", title: "五百人的晴日港", text: "人口达到 500。", check: () => city.stats.population >= 500 },
   { id: "main_story", title: "阳光小镇", text: "完成第五章主线。", check: () => city.completed },
 ];
 
@@ -298,6 +367,24 @@ function upgradeCost(building) {
   return Math.round(BUILDINGS[building.type].cost * GAME_BALANCE.upgradeCostMultiplier * buildingLevel(building) * discount);
 }
 
+function upgradeState(building) {
+  if (!building) return { ok: false, reason: "请选择一座建筑。", cost: 0, missing: [] };
+  const level = buildingLevel(building);
+  if (BUILDINGS[building.type]?.landmark) return { ok: false, reason: "地标建筑目前不参与等级升级。", cost: 0, missing: [] };
+  if (level >= MAX_BUILDING_LEVEL) return { ok: false, reason: "建筑已满级。", cost: 0, missing: [] };
+  const nextLevel = level + 1;
+  const cost = upgradeCost(building);
+  const rule = UPGRADE_RULES[building.type]?.[nextLevel] || {};
+  const missing = evaluateRequirements(rule).missing;
+  if (city.stats.money < cost) missing.push(`资金 ${money(cost)}`);
+  return {
+    ok: missing.length === 0,
+    cost,
+    missing,
+    reason: missing.length ? `升级到 Lv.${nextLevel} 还需要：${missing.join("、")}。` : "",
+  };
+}
+
 function currentChapter() {
   return CHAPTERS[Math.min(city.chapterIndex, CHAPTERS.length - 1)];
 }
@@ -315,10 +402,65 @@ function formatGoalValue(goal, value) {
   return `${Math.round(value)}${goal.unit || ""}`;
 }
 
-function isToolUnlocked(tool) {
+function metricValue(metric) {
+  const map = {
+    chapter: city.chapterIndex,
+    population: city.stats.population,
+    happiness: city.stats.happiness,
+    money: city.stats.money,
+    traffic: city.stats.traffic,
+    power: city.stats.power,
+    water: city.stats.water,
+    education: city.stats.education || 0,
+    fire: city.stats.fire || 0,
+    culture: city.stats.culture || 0,
+    transport: city.stats.transport || 0,
+    employment: city.stats.employmentRate || 0,
+  };
+  return Number.isFinite(map[metric]) ? map[metric] : 0;
+}
+
+function requirementLabel(metric, target) {
+  const labels = {
+    chapter: "章节",
+    population: "人口",
+    happiness: "幸福",
+    money: "资金",
+    traffic: "交通",
+    power: "电力",
+    water: "供水",
+    education: "教育",
+    fire: "消防",
+    culture: "文化",
+    transport: "通勤",
+    employment: "就业",
+  };
+  const value = metric === "chapter" ? target + 1 : target;
+  const formatted = metric === "money" ? money(target) : `${Math.round(value)}${metric === "chapter" || metric === "population" ? "" : "%"}`;
+  return `${labels[metric] || metric} ${formatted}`;
+}
+
+function evaluateRequirements(requirements = {}) {
+  const entries = Object.entries(requirements);
+  const missing = entries
+    .filter(([metric, target]) => metricValue(metric) < target)
+    .map(([metric, target]) => requirementLabel(metric, target));
+  return { ok: missing.length === 0, missing };
+}
+
+function unlockState(tool) {
   const config = BUILDINGS[tool];
-  if (!config || tool === "road" || tool === "bulldoze") return true;
-  return city.chapterIndex >= (config.unlockChapter || 0);
+  if (!config || tool === "road" || tool === "bulldoze") return { ok: true, missing: [], label: "" };
+  const requirements = config.unlock || { chapter: config.unlockChapter || 0 };
+  const result = evaluateRequirements(requirements);
+  return {
+    ...result,
+    label: result.ok ? "已解锁" : `未解锁：${result.missing.join("、")}`,
+  };
+}
+
+function isToolUnlocked(tool) {
+  return unlockState(tool).ok;
 }
 
 function eventImpact() {
@@ -871,7 +1013,8 @@ function setBuildingLevelVisual(building) {
 function canBuild(type, tile) {
   if (!tile) return { ok: false, reason: "请选择地图格子。" };
   if (type === "bulldoze") return tile.road || tile.buildingId ? { ok: true } : { ok: false, reason: "这里没有可拆除的内容。" };
-  if (!isToolUnlocked(type)) return { ok: false, reason: `${BUILDINGS[type].name}会在后续章节解锁。先完成当前目标。` };
+  const unlock = unlockState(type);
+  if (!unlock.ok) return { ok: false, reason: `${BUILDINGS[type].name}尚未解锁。还需要：${unlock.missing.join("、")}。` };
   if (type === "road" && tile.road) {
     if (tile.roadTier === "lane" && city.selectedRoadTier === "avenue") {
       const upgradePrice = ROAD_TIERS.avenue.cost - Math.round(ROAD_TIERS.lane.cost * 0.25);
@@ -921,6 +1064,7 @@ function maybeCompleteChapter() {
   const completedTitle = chapter.title;
   if (!city.completedChapters.includes(city.chapterIndex)) city.completedChapters.push(city.chapterIndex);
   applyChapterBonus(city.chapterIndex, chapter);
+  spawnChapterCelebration(completedTitle);
   if (city.chapterIndex < CHAPTERS.length - 1) {
     city.chapterIndex += 1;
     addMessage(`${completedTitle}完成！${chapter.reward}`);
@@ -1210,6 +1354,19 @@ function spawnBubble(text, x, z, color = 0xffb85f) {
   effectGroup.add(sprite);
 }
 
+function spawnChapterCelebration(title) {
+  spawnBubble("章节完成", 9, 9, 0xffb85f);
+  spawnBubble(title.includes("：") ? title.split("：").pop() : title, 8, 10, 0x5aa27d);
+  cameraTarget.set(0, 0, 0);
+  for (let i = 0; i < 10; i += 1) {
+    window.setTimeout(() => {
+      const x = 5 + Math.random() * 8;
+      const z = 6 + Math.random() * 6;
+      spawnBubble("★", x, z, i % 2 ? 0xffadc6 : 0xffd36f);
+    }, i * 80);
+  }
+}
+
 function place(type, x, z, options = {}) {
   const tile = getTile(x, z);
   const previousTier = city.selectedRoadTier;
@@ -1319,25 +1476,14 @@ function bulldoze(tile) {
 
 function upgradeSelectedBuilding() {
   const tile = city.selectedTile;
-  if (!tile?.buildingId) {
-    addMessage("先选择一座建筑，再进行升级。");
+  const building = tile?.buildingId ? buildingById(tile.buildingId) : null;
+  const state = upgradeState(building);
+  if (!state.ok) {
+    addMessage(state.reason);
     renderUI();
     return false;
   }
-  const building = buildingById(tile.buildingId);
-  if (!building) return false;
-  if (buildingLevel(building) >= MAX_BUILDING_LEVEL) {
-    addMessage("这座建筑已经达到最高等级。");
-    renderUI();
-    return false;
-  }
-  const cost = upgradeCost(building);
-  if (city.stats.money < cost) {
-    addMessage(`升级需要 ${money(cost)}，当前资金不足。`);
-    renderUI();
-    return false;
-  }
-  city.stats.money -= cost;
+  city.stats.money -= state.cost;
   building.level = buildingLevel(building) + 1;
   city.upgradeCount += 1;
   setBuildingLevelVisual(building);
@@ -1702,13 +1848,14 @@ function renderUI() {
   els.selectedTitle.textContent = selected.title;
   els.selectedInfo.textContent = selected.text;
   const selectedBuilding = city.selectedTile?.buildingId ? buildingById(city.selectedTile.buildingId) : null;
-  const selectedUpgradeCost = selectedBuilding ? upgradeCost(selectedBuilding) : 0;
-  els.upgradeButton.disabled = !selectedBuilding || buildingLevel(selectedBuilding) >= MAX_BUILDING_LEVEL || city.stats.money < selectedUpgradeCost;
+  const selectedUpgrade = upgradeState(selectedBuilding);
+  els.upgradeButton.disabled = !selectedUpgrade.ok;
   els.upgradeButton.textContent = selectedBuilding
     ? buildingLevel(selectedBuilding) >= MAX_BUILDING_LEVEL
       ? "建筑已满级"
-      : `升级建筑 ${money(selectedUpgradeCost)}`
+      : `升级建筑 ${money(selectedUpgrade.cost)}`
     : "升级建筑";
+  els.upgradeButton.title = selectedUpgrade.reason;
   els.currentTool.textContent = city.selectedTool === "road" ? `当前：${ROAD_TIERS[city.selectedRoadTier].name}` : `当前：${BUILDINGS[city.selectedTool].name}`;
   els.hintText.textContent = BUILDINGS[city.selectedTool].hint;
   els.toolCost.textContent =
@@ -1724,9 +1871,11 @@ function renderUI() {
   els.toolButtons.forEach((button) => {
     const tool = button.dataset.tool;
     const cost = tool === "road" ? ROAD_TIERS[city.selectedRoadTier].cost : BUILDINGS[tool].cost;
+    const unlock = unlockState(tool);
     button.classList.toggle("active", tool === city.selectedTool);
-    button.disabled = (tool !== "bulldoze" && city.stats.money < cost) || !isToolUnlocked(tool);
-    button.title = isToolUnlocked(tool) ? "" : "完成当前章节后解锁";
+    button.disabled = (tool !== "bulldoze" && city.stats.money < cost) || !unlock.ok;
+    button.classList.toggle("is-locked", !unlock.ok);
+    button.title = unlock.ok ? "" : unlock.label;
   });
 
   els.advisorList.innerHTML = advisorMessages()
@@ -1743,7 +1892,15 @@ function renderUI() {
       </article>`;
     })
     .join("");
-  els.unlockText.textContent = city.completed ? "主线完成：进入自由建设。" : chapter.reward;
+  const lockedTools = els.toolButtons
+    .map((button) => button.dataset.tool)
+    .filter((tool) => !unlockState(tool).ok)
+    .map((tool) => `${BUILDINGS[tool].name}（${unlockState(tool).missing.join("、")}）`);
+  els.unlockText.textContent = city.completed
+    ? "主线完成：进入自由建设。"
+    : lockedTools.length
+      ? `${chapter.reward} 待解锁：${lockedTools.slice(0, 3).join("；")}`
+      : `${chapter.reward} 当前阶段建筑已全部开放。`;
   els.eventList.innerHTML = city.activeEvents.length
     ? city.activeEvents
         .map((active) => {
@@ -2044,6 +2201,7 @@ function exposeTestApi() {
       modifiers: { ...city.modifiers },
       history: city.history.map((item) => ({ ...item })),
       report: { ...city.report },
+      unlocks: Object.fromEntries(Object.keys(BUILDINGS).map((tool) => [tool, unlockState(tool)])),
       selectedTool: city.selectedTool,
       selectedRoadTier: city.selectedRoadTier,
       roadVersion: city.roadVersion,
@@ -2060,6 +2218,12 @@ function exposeTestApi() {
       messages: [...city.messages],
       advisor: advisorMessages(),
     }),
+    canBuild: (type, x, z) => canBuild(type, getTile(x, z)),
+    upgradeState: (x, z) => {
+      const tile = getTile(x, z);
+      const building = tile?.buildingId ? buildingById(tile.buildingId) : null;
+      return upgradeState(building);
+    },
     setMoney: (amount) => {
       city.stats.money = amount;
       renderUI();

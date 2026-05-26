@@ -169,8 +169,12 @@ test("save data restores roads, buildings, chapters and upgrades", async ({ page
   await page.goto("/?test=1");
   const save = await page.evaluate(() => {
     const t = window.sunnyTownTest;
+    t.setMoney(80000);
     t.place("road", 1, 1, { tier: "lane" });
+    t.place("power", 1, 0);
+    t.place("water", 2, 1);
     t.place("residential", 1, 2);
+    t.advanceWeek(8);
     t.setSelectedTile(1, 2);
     t.upgradeSelectedBuilding();
     t.advanceWeek(2);
@@ -228,11 +232,14 @@ test("chapter goals unlock service buildings and achievements", async ({ page })
     t.place("road", 8, 7, { tier: "avenue" });
     t.place("power", 5, 7);
     t.place("water", 6, 7);
+    t.place("power", 12, 5);
+    t.place("water", 13, 5);
     t.place("residential", 4, 5);
     t.place("residential", 5, 5);
     t.place("residential", 7, 7);
     t.place("residential", 8, 5);
     t.place("residential", 9, 7);
+    t.place("residential", 10, 5);
     t.place("residential", 12, 7);
     t.place("residential", 13, 7);
     t.place("commercial", 10, 7);
@@ -248,6 +255,82 @@ test("chapter goals unlock service buildings and achievements", async ({ page })
   expect(after.achievements).toContain("hundred_people");
 });
 
+test("P2 building unlocks explain population, happiness and money requirements", async ({ page }) => {
+  await page.goto("/?test=1");
+  let early = await state(page);
+  expect(early.unlocks.plaza.ok).toBe(false);
+  expect(early.unlocks.plaza.missing.join(" ")).toContain("章节");
+  await expect(page.locator("[data-tool='plaza']")).toBeDisabled();
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(250000);
+    for (let x = 4; x <= 13; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("road", 8, 7, { tier: "avenue" });
+    t.place("power", 5, 7);
+    t.place("water", 6, 7);
+    t.place("power", 12, 5);
+    t.place("water", 13, 5);
+    t.place("residential", 4, 5);
+    t.place("residential", 5, 5);
+    t.place("residential", 7, 7);
+    t.place("residential", 8, 5);
+    t.place("residential", 9, 7);
+    t.place("residential", 10, 5);
+    t.place("residential", 12, 7);
+    t.place("residential", 13, 7);
+    t.place("commercial", 10, 7);
+    t.place("industrial", 11, 7);
+    t.advanceWeek(22);
+  });
+
+  const after = await state(page);
+  expect(after.chapterIndex).toBeGreaterThanOrEqual(1);
+  expect(after.unlocks.plaza.ok).toBe(true);
+  expect(after.unlocks.school.ok).toBe(true);
+  await expect(page.locator("[data-tool='plaza']")).toBeEnabled();
+  await expect(page.locator("#unlockText")).toContainText("待解锁");
+});
+
+test("P2 upgrade rules block immature districts and unlock after services improve", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(300000);
+    for (let x = 2; x <= 12; x += 1) t.place("road", x, 4, { tier: "avenue" });
+    t.place("power", 2, 5);
+    t.place("water", 3, 5);
+    t.place("residential", 4, 5);
+    t.setSelectedTile(4, 5);
+  });
+  const blocked = await page.evaluate(() => window.sunnyTownTest.upgradeState(4, 5));
+  expect(blocked.ok).toBe(false);
+  expect(blocked.missing.join(" ")).toMatch(/幸福|电力|供水/);
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("residential", 5, 5);
+    t.place("residential", 6, 5);
+    t.place("residential", 7, 5);
+    t.place("commercial", 8, 5);
+    t.place("industrial", 9, 5);
+    t.advanceWeek(22);
+    t.place("residential", 10, 5);
+    t.place("park", 3, 5);
+    t.place("school", 11, 5);
+    t.place("plaza", 12, 5);
+    t.advanceWeek(10);
+    t.setSelectedTile(4, 5);
+  });
+
+  const ready = await page.evaluate(() => window.sunnyTownTest.upgradeState(4, 5));
+  expect(ready.ok).toBe(true);
+  expect(await page.evaluate(() => window.sunnyTownTest.upgradeSelectedBuilding())).toBe(true);
+  const upgraded = await state(page);
+  expect(upgraded.buildings.find((building) => building.x === 4 && building.z === 5).level).toBe(2);
+  expect(upgraded.achievements).toContain("first_upgrade");
+});
+
 test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ page }) => {
   await page.goto("/?test=1");
   await page.evaluate(() => {
@@ -257,11 +340,14 @@ test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ pag
     t.place("road", 8, 7, { tier: "avenue" });
     t.place("power", 5, 7);
     t.place("water", 6, 7);
+    t.place("power", 12, 5);
+    t.place("water", 13, 5);
     t.place("residential", 4, 5);
     t.place("residential", 5, 5);
     t.place("residential", 7, 7);
     t.place("residential", 8, 5);
     t.place("residential", 9, 7);
+    t.place("residential", 10, 5);
     t.place("residential", 12, 7);
     t.place("residential", 13, 7);
     t.place("commercial", 10, 7);
