@@ -411,6 +411,185 @@ test("P3 residential tile details show service coverage and pollution", async ({
   await expect(page.locator("#selectedInfo")).toContainText("污染");
 });
 
+test("P3 services require road reachability to cover homes", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(180000);
+    for (let x = 4; x <= 14; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("road", 8, 7, { tier: "avenue" });
+    t.place("power", 5, 7);
+    t.place("water", 6, 7);
+    t.place("power", 12, 5);
+    t.place("water", 13, 5);
+    t.place("residential", 4, 5);
+    t.place("residential", 5, 5);
+    t.place("residential", 7, 7);
+    t.place("residential", 8, 5);
+    t.place("residential", 9, 7);
+    t.place("residential", 10, 5);
+    t.place("residential", 12, 7);
+    t.place("residential", 13, 7);
+    t.place("commercial", 10, 7);
+    t.place("industrial", 11, 7);
+    t.advanceWeek(24);
+    t.place("road", 2, 6, { tier: "avenue" });
+    t.place("school", 2, 5);
+    t.advanceWeek(2);
+    t.setSelectedTile(4, 5);
+  });
+
+  const disconnected = await state(page);
+  const homeBefore = disconnected.tiles.find((tile) => tile.x === 4 && tile.z === 5);
+  expect(homeBefore.coverage.education || 0).toBe(0);
+  await expect(page.locator("#selectedInfo")).toContainText("教育 0%");
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 3, 6, { tier: "avenue" });
+    t.advanceWeek(1);
+    t.setSelectedTile(4, 5);
+  });
+  const connected = await state(page);
+  const homeAfter = connected.tiles.find((tile) => tile.x === 4 && tile.z === 5);
+  expect(homeAfter.coverage.education).toBeGreaterThan(0);
+  await expect(page.locator("#selectedInfo")).toContainText(/教育 [1-9]/);
+});
+
+test("P3 service capacity pressure reduces coverage and creates resident needs", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(900000);
+    for (const z of [2, 4, 6, 8, 10, 12, 14, 16]) {
+      for (let x = 2; x <= 15; x += 1) t.place("road", x, z, { tier: "avenue" });
+    }
+    for (const x of [2, 5, 8, 11, 14]) {
+      for (let z = 2; z <= 16; z += 1) t.place("road", x, z, { tier: "avenue" });
+    }
+    [
+      ["power", 2, 3],
+      ["water", 3, 3],
+      ["power", 4, 3],
+      ["power", 6, 3],
+      ["water", 7, 3],
+      ["power", 10, 3],
+      ["water", 11, 3],
+      ["power", 14, 3],
+      ["water", 15, 3],
+      ["power", 2, 15],
+      ["water", 5, 15],
+      ["power", 8, 15],
+      ["water", 11, 15],
+      ["power", 14, 15],
+      ["water", 15, 15],
+      ["power", 2, 17],
+      ["water", 5, 17],
+      ["power", 8, 17],
+      ["water", 11, 17],
+      ["power", 14, 17],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+    const reserved = new Set(["6,5", "9,5", "12,5", "6,7", "9,7", "12,7", "6,9", "9,9", "12,9", "6,11", "9,11", "12,11"]);
+    const homes = [];
+    for (const z of [5, 7, 9, 11, 13]) {
+      for (const x of [3, 4, 6, 7, 9, 10, 12, 13]) {
+        if (!reserved.has(`${x},${z}`)) homes.push([x, z]);
+      }
+    }
+    homes.slice(0, 32).forEach(([x, z]) => t.place("residential", x, z));
+    [[3, 15], [4, 15], [6, 15], [7, 15], [9, 15], [10, 15]].forEach(([x, z]) => t.place("commercial", x, z));
+    [[15, 5], [15, 7], [15, 9]].forEach(([x, z]) => t.place("industrial", x, z));
+    t.advanceWeek(36);
+    t.place("school", 9, 5);
+    t.advanceWeek(12);
+  });
+
+  const after = await state(page);
+  expect(after.stats.servicePressure.education.score).toBeLessThan(1);
+  expect(after.stats.residentNeeds.some((need) => need.id === "education_capacity")).toBe(true);
+  await expect(page.locator("#happinessBreakdown")).toContainText("学校容量吃紧");
+});
+
+test("P3 residential zoning rewards services and penalizes nearby industry", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(260000);
+    for (let x = 2; x <= 14; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("power", 3, 7);
+    t.place("water", 4, 7);
+    t.place("power", 12, 7);
+    t.place("water", 13, 7);
+    t.place("residential", 5, 5);
+    t.place("residential", 6, 5);
+    t.place("residential", 7, 5);
+    t.place("residential", 8, 5);
+    t.place("residential", 10, 5);
+    t.place("commercial", 10, 7);
+    t.place("industrial", 9, 5);
+    t.advanceWeek(18);
+    t.place("park", 5, 7);
+    t.place("school", 6, 7);
+    t.advanceWeek(4);
+    t.setSelectedTile(10, 5);
+  });
+
+  const mixed = await state(page);
+  const mixedCapacity = mixed.stats.capacity;
+  const mixedScore = mixed.stats.zoning.residential;
+  expect(mixed.stats.happinessReasons.some((reason) => reason.id === "zoning")).toBe(true);
+  await expect(page.locator("#selectedInfo")).toContainText("区位");
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("bulldoze", 9, 5);
+    t.place("industrial", 14, 5);
+    t.advanceWeek(2);
+    t.setSelectedTile(10, 5);
+  });
+  const separated = await state(page);
+  expect(separated.stats.zoning.residential).toBeGreaterThan(mixedScore);
+  expect(separated.stats.capacity).toBeGreaterThan(mixedCapacity);
+});
+
+test("P3 commercial and industrial zoning affects tax income", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(240000);
+    for (let x = 2; x <= 14; x += 1) t.place("road", x, 6, { tier: "lane" });
+    t.place("power", 3, 7);
+    t.place("water", 4, 7);
+    t.place("power", 12, 7);
+    t.place("water", 13, 7);
+    t.place("residential", 5, 5);
+    t.place("residential", 6, 5);
+    t.place("residential", 7, 5);
+    t.place("residential", 8, 5);
+    t.place("commercial", 12, 5);
+    t.place("industrial", 13, 5);
+    t.advanceWeek(14);
+    t.setSelectedTile(12, 5);
+  });
+
+  const weak = await state(page);
+  const weakIncome = weak.stats.income;
+  await expect(page.locator("#selectedInfo")).toContainText("商业区位");
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    for (let x = 5; x <= 13; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("bulldoze", 12, 5);
+    t.place("commercial", 7, 7);
+    t.advanceWeek(2);
+    t.setSelectedTile(7, 7);
+  });
+  const strong = await state(page);
+  expect(strong.stats.zoning.commercial).toBeGreaterThan(weak.stats.zoning.commercial);
+  expect(strong.stats.income).toBeGreaterThan(weakIncome);
+  await expect(page.locator("#selectedInfo")).toContainText("商业区位");
+});
+
 test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ page }) => {
   await page.goto("/?test=1");
   await page.evaluate(() => {

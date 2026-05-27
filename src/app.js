@@ -17,6 +17,13 @@ const GAME_BALANCE = {
   utilityNeedPerBuilding: 28,
   utilityNeedPerHome: 10,
   baseHappiness: 72,
+  serviceLoad: {
+    park: 0.8,
+    education: 0.34,
+    fire: 0.55,
+    culture: 0.48,
+    transport: 0.5,
+  },
   upgradeCostMultiplier: 0.72,
   levelMultipliers: {
     capacity: [1, 1.55, 2.25],
@@ -58,14 +65,14 @@ const BUILDINGS = {
   residential: { name: "住宅", cost: 900, maintenance: 8, tax: 38, capacity: 38, color: 0xffb8c9, unlockChapter: 0, hint: "居民会从住宅出发，沿道路前往工作或消费地点。" },
   commercial: { name: "商业", cost: 1300, maintenance: 18, tax: 72, jobs: 42, color: 0xffd36f, unlockChapter: 0, hint: "商业提供岗位和税收，也会吸引居民消费。" },
   industrial: { name: "工业", cost: 1600, maintenance: 22, tax: 92, jobs: 64, pollution: 14, color: 0x9fc0cf, unlockChapter: 0, hint: "工业岗位多、税收高，但会制造污染和交通压力。" },
-  park: { name: "公园", cost: 1100, maintenance: 18, service: "park", radius: 3, color: 0x8ddf91, unlockChapter: 1, unlock: { chapter: 1, population: 120 }, hint: "公园会提升附近住宅幸福度。" },
-  school: { name: "学校", cost: 2600, maintenance: 42, service: "education", radius: 4, color: 0xffc36e, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 58 }, hint: "学校提升教育覆盖和长期幸福度。" },
-  fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, color: 0xff8b7f, unlockChapter: 2, unlock: { chapter: 2, population: 240, happiness: 64, money: 3000 }, hint: "消防站降低城市风险，提高居民安心感。" },
+  park: { name: "公园", cost: 1100, maintenance: 18, service: "park", radius: 3, serviceCapacity: 180, color: 0x8ddf91, unlockChapter: 1, unlock: { chapter: 1, population: 120 }, hint: "公园会提升附近住宅幸福度。" },
+  school: { name: "学校", cost: 2600, maintenance: 42, service: "education", radius: 4, serviceCapacity: 220, color: 0xffc36e, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 58 }, hint: "学校提升教育覆盖和长期幸福度。" },
+  fire: { name: "消防站", cost: 3200, maintenance: 50, service: "fire", radius: 5, serviceCapacity: 380, color: 0xff8b7f, unlockChapter: 2, unlock: { chapter: 2, population: 240, happiness: 64, money: 3000 }, hint: "消防站降低城市风险，提高居民安心感。" },
   power: { name: "电力", cost: 3600, maintenance: 55, service: "power", radius: 6, supply: 320, color: 0xffe47a, unlockChapter: 0, hint: "电力设施为附近建筑供电。" },
   water: { name: "水塔", cost: 2800, maintenance: 45, service: "water", radius: 6, supply: 320, color: 0x84c9ff, unlockChapter: 0, hint: "水塔为附近建筑供水。" },
-  plaza: { name: "小广场", cost: 4200, maintenance: 38, service: "culture", radius: 4, color: 0xf6d58b, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 60, money: 3000 }, landmark: true, hint: "小广场会提升周边生活气氛，并让住宅更愿意升级。" },
-  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, color: 0xb9d8f2, unlockChapter: 3, unlock: { chapter: 3, population: 420, traffic: 50, money: 12000 }, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
-  lantern: { name: "祭典灯", cost: 2400, maintenance: 20, service: "culture", radius: 3, color: 0xffb1a6, unlockChapter: 2, unlock: { chapter: 2, population: 260, happiness: 68, money: 2400 }, landmark: true, hint: "祭典灯提升街区氛围，适合布置在住宅和商业之间。" },
+  plaza: { name: "小广场", cost: 4200, maintenance: 38, service: "culture", radius: 4, serviceCapacity: 260, color: 0xf6d58b, unlockChapter: 1, unlock: { chapter: 1, population: 120, happiness: 60, money: 3000 }, landmark: true, hint: "小广场会提升周边生活气氛，并让住宅更愿意升级。" },
+  station: { name: "小车站", cost: 5600, maintenance: 58, service: "transport", radius: 5, serviceCapacity: 420, color: 0xb9d8f2, unlockChapter: 3, unlock: { chapter: 3, population: 420, traffic: 50, money: 12000 }, landmark: true, hint: "小车站缓解通勤压力，适合放在主干道路旁。" },
+  lantern: { name: "祭典灯", cost: 2400, maintenance: 20, service: "culture", radius: 3, serviceCapacity: 120, color: 0xffb1a6, unlockChapter: 2, unlock: { chapter: 2, population: 260, happiness: 68, money: 2400 }, landmark: true, hint: "祭典灯提升街区氛围，适合布置在住宅和商业之间。" },
   bulldoze: { name: "拆除", cost: 0, hint: "拆除建筑会退回少量资金，道路也可以拆。" },
 };
 
@@ -371,6 +378,7 @@ function buildingValue(building, key) {
   if (key === "tax") return Math.round((config.tax || 0) * levelMultiplier("tax", level));
   if (key === "maintenance") return Math.round((config.maintenance || 0) * levelMultiplier("maintenance", level));
   if (key === "radius") return Math.round((config.radius || 0) * levelMultiplier("service", level));
+  if (key === "serviceCapacity") return Math.round((config.serviceCapacity || 0) * levelMultiplier("service", level));
   if (key === "supply") return Math.round((config.supply || 0) * levelMultiplier("supply", level));
   if (key === "pollution") return Math.round((config.pollution || 0) * levelMultiplier("pollution", level));
   return config[key] || 0;
@@ -526,17 +534,26 @@ function buildResidentNeeds({
   transport,
   pollution,
   routeStats,
+  servicePressure,
+  zoning,
 }) {
   const needs = [];
   if (power < 80) needs.push({ id: "power", title: "电力不稳", detail: `供电覆盖 ${Math.round(power)}%，会拖慢入住和商业效率。`, severity: 100 - power });
   if (water < 80) needs.push({ id: "water", title: "供水不足", detail: `供水覆盖 ${Math.round(water)}%，住宅容量没有完全释放。`, severity: 100 - water });
   if (employmentRate < 78 && city.stats.population > 0) needs.push({ id: "employment", title: "岗位不足", detail: `就业率 ${Math.round(employmentRate)}%，需要更多可达商业或工业。`, severity: 78 - employmentRate });
   if (traffic < 70) needs.push({ id: "traffic", title: "通勤吃力", detail: `交通评分 ${Math.round(traffic)}%，道路升级和车站能缓解压力。`, severity: 70 - traffic + routeStats.unreachableResidents });
+  if (servicePressure?.education?.score < 0.9 && education > 0) needs.push({ id: "education_capacity", title: "学校容量吃紧", detail: `教育容量 ${Math.round(servicePressure.education.capacity)}/${Math.round(servicePressure.education.demand)}，升级或新增学校可稳定升级路线。`, severity: 18 + (1 - servicePressure.education.score) * 42 });
+  if (servicePressure?.fire?.score < 0.9 && fire > 0) needs.push({ id: "fire_capacity", title: "消防容量吃紧", detail: `消防容量 ${Math.round(servicePressure.fire.capacity)}/${Math.round(servicePressure.fire.demand)}，高密度街区需要更多消防站。`, severity: 16 + (1 - servicePressure.fire.score) * 38 });
+  if (servicePressure?.park?.score < 0.9 && park > 0) needs.push({ id: "park_capacity", title: "公园承载不足", detail: `休闲容量 ${Math.round(servicePressure.park.capacity)}/${Math.round(servicePressure.park.demand)}，住宅密集区需要更多休闲空间。`, severity: 12 + (1 - servicePressure.park.score) * 28 });
   if (education < 35 && city.stats.population > 160) needs.push({ id: "education", title: "教育覆盖低", detail: `教育覆盖 ${Math.round(education)}%，住宅升级会更困难。`, severity: 35 - education });
   if (fire < 35 && city.stats.population > 240) needs.push({ id: "fire", title: "消防安心感不足", detail: `消防覆盖 ${Math.round(fire)}%，中型城镇需要安全网。`, severity: 35 - fire });
   if (park < 25 && city.stats.population > 120) needs.push({ id: "park", title: "休闲空间不足", detail: `公园覆盖 ${Math.round(park)}%，居民缺少日常放松空间。`, severity: 25 - park });
   if (culture < 25 && city.chapterIndex >= 1) needs.push({ id: "culture", title: "街区氛围不足", detail: `文化覆盖 ${Math.round(culture)}%，地标和祭典灯能提升归属感。`, severity: 25 - culture });
   if (transport < 18 && city.chapterIndex >= 3) needs.push({ id: "transport", title: "通勤节点不足", detail: `通勤服务 ${Math.round(transport)}%，小车站适合放在主干路旁。`, severity: 18 - transport });
+  if (servicePressure?.transport?.score < 0.9 && transport > 0) needs.push({ id: "transport_capacity", title: "车站承载不足", detail: `通勤容量 ${Math.round(servicePressure.transport.capacity)}/${Math.round(servicePressure.transport.demand)}，交通节点过少会削弱缓堵效果。`, severity: 14 + (1 - servicePressure.transport.score) * 30 });
+  if (zoning?.residentialScore < 62 && city.stats.population > 100) needs.push({ id: "residential_zoning", title: "住宅区位一般", detail: `住宅区位 ${Math.round(zoning.residentialScore)}%，靠近服务、远离工业会提高入住稳定性。`, severity: 62 - zoning.residentialScore });
+  if (zoning?.commercialScore < 62 && countBuildings("commercial") >= 3) needs.push({ id: "commercial_zoning", title: "商圈客流不足", detail: `商业区位 ${Math.round(zoning.commercialScore)}%，商业贴近主干路和住宅会提高税收。`, severity: 62 - zoning.commercialScore });
+  if (zoning?.industrialScore < 58 && countBuildings("industrial") >= 2) needs.push({ id: "industrial_zoning", title: "工业区位低效", detail: `工业区位 ${Math.round(zoning.industrialScore)}%，工业适合靠主干路并和住宅保持距离。`, severity: 58 - zoning.industrialScore });
   if (pollution > 24) needs.push({ id: "pollution", title: "污染靠近住宅", detail: `住宅平均污染 ${Math.round(pollution)}，工业区需要隔离或公园缓冲。`, severity: pollution - 24 });
   return needs.sort((a, b) => b.severity - a.severity).slice(0, 4);
 }
@@ -598,6 +615,7 @@ const city = {
     trafficCapacity: 0,
     congestion: 0,
     coverage: {},
+    coverageRoutes: {},
     pollution: 0,
     mesh: null,
     roadMesh: null,
@@ -666,6 +684,7 @@ const city = {
     culture: 0,
     transport: 0,
     pollution: 0,
+    servicePressure: {},
     happinessReasons: [],
     residentNeeds: [],
   },
@@ -820,6 +839,19 @@ function hasAdjacentRoad(tile) {
 
 function adjacentRoads(tile) {
   return neighbors(tile).filter((item) => item.road);
+}
+
+function buildingsWithin(building, radius, types = null) {
+  return city.buildings.filter((other) => {
+    if (other.id === building.id) return false;
+    if (types && !types.includes(other.type)) return false;
+    return distance(building, other) <= radius;
+  });
+}
+
+function bestAdjacentRoadTier(building) {
+  const road = nearestRoadForBuilding(building);
+  return road?.roadTier || null;
 }
 
 function buildingById(id) {
@@ -1208,6 +1240,7 @@ function clearCityContent() {
     tile.trafficCapacity = 0;
     tile.congestion = 0;
     tile.coverage = {};
+    tile.coverageRoutes = {};
     tile.pollution = 0;
     if (tile.roadMesh) {
       roadGroup.remove(tile.roadMesh);
@@ -1560,21 +1593,80 @@ function upgradeSelectedBuilding() {
 function clearCoverageAndTraffic() {
   city.tiles.forEach((tile) => {
     tile.coverage = {};
+    tile.coverageRoutes = {};
     tile.pollution = 0;
     tile.trafficLoad = 0;
     tile.congestion = 0;
   });
 }
 
+function serviceDemand(service, residential) {
+  const load = GAME_BALANCE.serviceLoad[service];
+  if (!load) return 0;
+  return residential.reduce((sum, home) => sum + buildingValue(home, "capacity") * load, 0);
+}
+
+function servicePressure(service, residential) {
+  const providers = city.buildings.filter((building) => BUILDINGS[building.type]?.service === service && hasAdjacentRoad(getTile(building.x, building.z)));
+  const capacity = providers.reduce((sum, building) => sum + buildingValue(building, "serviceCapacity"), 0);
+  const demand = serviceDemand(service, residential);
+  const pressure = demand > 0 ? clamp(capacity / demand, 0.25, 1.15) : 1;
+  return { capacity, demand, score: Math.min(1, pressure) };
+}
+
+function servicePressureMap(residential) {
+  return Object.keys(GAME_BALANCE.serviceLoad).reduce((map, service) => {
+    map[service] = servicePressure(service, residential);
+    return map;
+  }, {});
+}
+
+function residentialLocationScore(building) {
+  const tile = getTile(building.x, building.z);
+  const serviceScore = ((tile.coverage.park || 0) * 0.25 + (tile.coverage.education || 0) * 0.18 + (tile.coverage.fire || 0) * 0.14 + (tile.coverage.culture || 0) * 0.12 + ((tile.coverage.power || 0) + (tile.coverage.water || 0)) * 0.15) * 100;
+  const industryPenalty = buildingsWithin(building, 3, ["industrial"]).length * 8;
+  const roadBonus = bestAdjacentRoadTier(building) === "avenue" ? 4 : 0;
+  return clamp(48 + serviceScore + roadBonus - tile.pollution * 1.4 - industryPenalty, 20, 115);
+}
+
+function commercialLocationScore(building, residential) {
+  const nearbyHomes = buildingsWithin(building, 5, ["residential"]).length;
+  const roadBonus = bestAdjacentRoadTier(building) === "avenue" ? 18 : 4;
+  const serviceBonus = (getTile(building.x, building.z).coverage.culture || 0) * 12 + (getTile(building.x, building.z).coverage.transport || 0) * 10;
+  const customerBonus = Math.min(34, nearbyHomes * 5.5 + residential.length * 0.35);
+  return clamp(42 + roadBonus + customerBonus + serviceBonus, 25, 125);
+}
+
+function industrialLocationScore(building) {
+  const nearbyHomes = buildingsWithin(building, 4, ["residential"]).length;
+  const roadBonus = bestAdjacentRoadTier(building) === "avenue" ? 24 : 5;
+  const utilityScore = ((getTile(building.x, building.z).coverage.power || 0) + (getTile(building.x, building.z).coverage.water || 0)) * 20;
+  return clamp(44 + roadBonus + utilityScore - nearbyHomes * 9, 20, 120);
+}
+
+function averageScore(buildings, scoreFn) {
+  if (!buildings.length) return 0;
+  return buildings.reduce((sum, building) => sum + scoreFn(building), 0) / buildings.length;
+}
+
 function spreadCoverage() {
   clearCoverageAndTraffic();
+  const residential = city.buildings.filter((building) => building.type === "residential" && hasAdjacentRoad(getTile(building.x, building.z)));
+  const pressures = servicePressureMap(residential);
   city.buildings.forEach((building) => {
     const config = BUILDINGS[building.type];
     const radius = buildingValue(building, "radius");
+    const serviceRoad = config.service ? nearestRoadForBuilding(building) : null;
     if (config.service && radius) {
       city.tiles.forEach((tile) => {
         const reach = Math.max(0, radius - distance(building, tile));
-        if (reach > 0) tile.coverage[config.service] = Math.max(tile.coverage[config.service] || 0, reach / radius);
+        if (reach <= 0) return;
+        const targetBuilding = tile.buildingId ? buildingById(tile.buildingId) : null;
+        const targetRoad = targetBuilding ? nearestRoadForBuilding(targetBuilding) : null;
+        const route = targetRoad && serviceRoad ? findPath(serviceRoad, targetRoad, { maxCost: radius * 2.2 }) : null;
+        if (targetBuilding && !route) return;
+        tile.coverage[config.service] = Math.max(tile.coverage[config.service] || 0, reach / radius);
+        tile.coverageRoutes[config.service] = true;
       });
     }
     if (config.pollution) {
@@ -1584,6 +1676,13 @@ function spreadCoverage() {
       });
     }
   });
+  residential.forEach((home) => {
+    const tile = getTile(home.x, home.z);
+    Object.entries(tile.coverage).forEach(([service, value]) => {
+      tile.coverage[service] = value * (pressures[service]?.score || 1);
+    });
+  });
+  city.stats.servicePressure = pressures;
 }
 
 function nearestRoadForBuilding(building) {
@@ -1595,10 +1694,11 @@ function pathKey(start, end) {
   return `${city.roadVersion}:${start.x},${start.z}->${end.x},${end.z}`;
 }
 
-function findPath(start, end) {
+function findPath(start, end, options = {}) {
+  const cacheable = !options.maxCost;
   if (!start || !end) return null;
   const key = pathKey(start, end);
-  if (city.pathCache.has(key)) return city.pathCache.get(key);
+  if (cacheable && city.pathCache.has(key)) return city.pathCache.get(key);
 
   const open = [{ tile: start, g: 0, f: distance(start, end), parent: null }];
   const best = new Map([[`${start.x},${start.z}`, 0]]);
@@ -1618,20 +1718,21 @@ function findPath(start, end) {
         route.unshift(node.tile);
         node = node.parent;
       }
-      city.pathCache.set(key, route);
+      if (cacheable) city.pathCache.set(key, route);
       return route;
     }
 
     roadNeighbors(current.tile).forEach(({ tile }) => {
       const nextId = `${tile.x},${tile.z}`;
       const cost = current.g + (tile.roadTier === "avenue" ? 0.8 : 1);
+      if (options.maxCost && cost > options.maxCost) return;
       if (best.has(nextId) && best.get(nextId) <= cost) return;
       best.set(nextId, cost);
       open.push({ tile, g: cost, f: cost + distance(tile, end), parent: current });
     });
   }
 
-  city.pathCache.set(key, null);
+  if (cacheable) city.pathCache.set(key, null);
   return null;
 }
 
@@ -1708,11 +1809,16 @@ function computeStats() {
   const commercial = activeBuildings.filter((building) => building.type === "commercial");
   const industrial = activeBuildings.filter((building) => building.type === "industrial");
   const destinations = [...commercial, ...industrial];
+  const residentialScore = averageScore(residential, residentialLocationScore);
+  const commercialScore = averageScore(commercial, (building) => commercialLocationScore(building, residential));
+  const industrialScore = averageScore(industrial, industrialLocationScore);
+  const zoningScore = residential.length || commercial.length || industrial.length ? [residentialScore, commercialScore, industrialScore].filter(Boolean).reduce((sum, value) => sum + value, 0) / [residentialScore, commercialScore, industrialScore].filter(Boolean).length : 0;
 
   const capacity = residential.reduce((sum, building) => {
     const tile = getTile(building.x, building.z);
     const utilities = ((tile.coverage.power || 0) + (tile.coverage.water || 0)) / 2;
-    return sum + Math.round(buildingValue(building, "capacity") * (0.35 + utilities * 0.65));
+    const location = clamp(0.82 + (residentialLocationScore(building) - 70) / 260, 0.72, 1.12);
+    return sum + Math.round(buildingValue(building, "capacity") * (0.35 + utilities * 0.65) * location);
   }, 0);
 
   const utilityNeed = Math.max(1, activeBuildings.filter((building) => building.type !== "park").length * GAME_BALANCE.utilityNeedPerBuilding + residential.length * GAME_BALANCE.utilityNeedPerHome);
@@ -1755,6 +1861,7 @@ function computeStats() {
     : industrial.length * 4;
   const avenueBoost = roads.filter((tile) => tile.roadTier === "avenue").length * ROAD_TIERS.avenue.happiness;
   const serviceBoost = park * 0.16 + education * 0.09 + fire * 0.07 + culture * 0.08;
+  const zoningBoost = residential.length ? (residentialScore - 62) * 0.08 : 0;
   const utilityPenalty = Math.max(0, 100 - power) * 0.09 + Math.max(0, 100 - water) * 0.09;
   const jobPenalty = city.residents.length > 0 ? Math.max(0, 78 - employmentRate) * 0.2 : 4;
   const transportRelief = transport * 0.08 + city.modifiers.trafficBonus;
@@ -1764,6 +1871,7 @@ function computeStats() {
   const happinessReasons = [
     impactItem("base", "基础生活", GAME_BALANCE.baseHappiness, "positive"),
     impactItem("service", "服务与公园", serviceBoost, "positive"),
+    impactItem("zoning", "宜居区位", zoningBoost, zoningBoost >= 0 ? "positive" : "negative"),
     impactItem("avenue", "樱花大道", Math.min(8, avenueBoost), "positive"),
     impactItem("bonus", "章节奖励", city.modifiers.happinessBonus, "positive"),
     impactItem("event", "城市事件", impact.happinessDelta, impact.happinessDelta >= 0 ? "positive" : "negative"),
@@ -1785,14 +1893,18 @@ function computeStats() {
     transport,
     pollution,
     routeStats,
+    servicePressure: city.stats.servicePressure,
+    zoning: { residentialScore, commercialScore, industrialScore },
   });
 
   const incomeEfficiency = clamp(0.55 + city.stats.traffic / 180, 0.45, 1);
   const residentialTax = routeStats.reachableResidents * BUILDINGS.residential.tax * (residential.length ? residential.reduce((sum, building) => sum + levelMultiplier("tax", buildingLevel(building)), 0) / residential.length : 1);
+  const commercialLocationMultiplier = clamp(commercialScore / 82, 0.72, 1.28);
+  const industrialLocationMultiplier = clamp(industrialScore / 82, 0.74, 1.22);
   const income =
     residentialTax +
-    commercial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency, 0) +
-    industrial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency, 0);
+    commercial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * commercialLocationMultiplier, 0) +
+    industrial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * industrialLocationMultiplier, 0);
   const roadMaintenance = roads.reduce((sum, tile) => sum + ROAD_TIERS[tile.roadTier].maintenance, 0);
   const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + buildingValue(building, "maintenance"), 0);
   const adjustedIncome = income * impact.incomeMultiplier + impact.incomeDelta;
@@ -1811,6 +1923,12 @@ function computeStats() {
   city.stats.culture = culture;
   city.stats.transport = transport;
   city.stats.pollution = pollution;
+  city.stats.zoning = {
+    residential: residentialScore,
+    commercial: commercialScore,
+    industrial: industrialScore,
+    overall: zoningScore,
+  };
   city.stats.happinessReasons = happinessReasons;
   city.stats.residentNeeds = residentNeeds;
   city.stats.unreachableResidents = routeStats.unreachableResidents;
@@ -1906,9 +2024,13 @@ function selectedDescription() {
     const upgradeText = buildingLevel(building) >= MAX_BUILDING_LEVEL ? "已满级" : `升级需 ${money(nextCost)}`;
     const coverageText =
       building.type === "residential"
-        ? `水电 ${Math.round(((tile.coverage.power || 0) + (tile.coverage.water || 0)) * 50)}%，教育 ${Math.round((tile.coverage.education || 0) * 100)}%，消防 ${Math.round((tile.coverage.fire || 0) * 100)}%，污染 ${Math.round(tile.pollution)}。`
+        ? `区位 ${Math.round(residentialLocationScore(building))}%，水电 ${Math.round(((tile.coverage.power || 0) + (tile.coverage.water || 0)) * 50)}%，教育 ${Math.round((tile.coverage.education || 0) * 100)}%，消防 ${Math.round((tile.coverage.fire || 0) * 100)}%，污染 ${Math.round(tile.pollution)}。`
+        : building.type === "commercial"
+          ? `商业区位 ${Math.round(commercialLocationScore(building, city.buildings.filter((item) => item.type === "residential")))}%，贴近住宅和主干路税收更高。`
+          : building.type === "industrial"
+            ? `工业区位 ${Math.round(industrialLocationScore(building))}%，靠主干路且远离住宅更高效。`
         : config.service
-          ? `服务半径 ${buildingValue(building, "radius")} 格，覆盖会影响附近住宅。`
+          ? `服务半径 ${buildingValue(building, "radius")} 格，容量 ${Math.round(city.stats.servicePressure?.[config.service]?.capacity || buildingValue(building, "serviceCapacity"))}/${Math.round(city.stats.servicePressure?.[config.service]?.demand || 0)}，覆盖会影响附近住宅。`
           : "";
     return { title: `${config.name} Lv.${buildingLevel(building)} (${active})`, text: `${config.hint} 关联居民/通勤 ${residents.length}。${coverageText} ${upgradeText}。` };
   }
@@ -2321,6 +2443,15 @@ function exposeTestApi() {
       visualAgentCount: city.visualAgents.length,
       roadCount: city.tiles.filter((tile) => tile.road).length,
       buildings: city.buildings.map((building) => ({ id: building.id, type: building.type, x: building.x, z: building.z, level: buildingLevel(building) })),
+      tiles: city.tiles.map((tile) => ({
+        x: tile.x,
+        z: tile.z,
+        type: tile.type,
+        buildingId: tile.buildingId,
+        coverage: { ...tile.coverage },
+        coverageRoutes: { ...tile.coverageRoutes },
+        pollution: tile.pollution,
+      })),
       roads: city.tiles
         .filter((tile) => tile.road)
         .map((tile) => ({ x: tile.x, z: tile.z, tier: tile.roadTier, mask: tile.roadMask, load: tile.trafficLoad, capacity: tile.trafficCapacity, congestion: tile.congestion })),
