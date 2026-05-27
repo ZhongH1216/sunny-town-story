@@ -522,6 +522,22 @@ function impactItem(id, label, value, kind) {
   return { id, label, value: Math.round(value * 10) / 10, kind };
 }
 
+function fiscalHealth({ money: currentMoney, income, maintenance }) {
+  const net = income - maintenance;
+  const reserveWeeks = maintenance > 0 ? currentMoney / Math.max(1, maintenance) : 24;
+  const netRatio = income > 0 ? net / income : currentMoney > 0 ? 0.1 : -1;
+  const recentDeficits = city.history.slice(-4).filter((item) => item.net < 0).length;
+  const score = clamp(58 + netRatio * 42 + Math.min(18, reserveWeeks * 1.6) - recentDeficits * 8 + (currentMoney < 0 ? currentMoney / 850 : 0), 0, 115);
+  const happiness = clamp((score - 58) * 0.08, -8, 5);
+  return {
+    score,
+    net,
+    reserveWeeks,
+    deficitWeeks: recentDeficits,
+    happiness,
+  };
+}
+
 function buildResidentNeeds({
   power,
   water,
@@ -536,6 +552,7 @@ function buildResidentNeeds({
   routeStats,
   servicePressure,
   zoning,
+  fiscal,
 }) {
   const needs = [];
   if (power < 80) needs.push({ id: "power", title: "电力不稳", detail: `供电覆盖 ${Math.round(power)}%，会拖慢入住和商业效率。`, severity: 100 - power });
@@ -554,6 +571,8 @@ function buildResidentNeeds({
   if (zoning?.residentialScore < 62 && city.stats.population > 100) needs.push({ id: "residential_zoning", title: "住宅区位一般", detail: `住宅区位 ${Math.round(zoning.residentialScore)}%，靠近服务、远离工业会提高入住稳定性。`, severity: 62 - zoning.residentialScore });
   if (zoning?.commercialScore < 62 && countBuildings("commercial") >= 3) needs.push({ id: "commercial_zoning", title: "商圈客流不足", detail: `商业区位 ${Math.round(zoning.commercialScore)}%，商业贴近主干路和住宅会提高税收。`, severity: 62 - zoning.commercialScore });
   if (zoning?.industrialScore < 58 && countBuildings("industrial") >= 2) needs.push({ id: "industrial_zoning", title: "工业区位低效", detail: `工业区位 ${Math.round(zoning.industrialScore)}%，工业适合靠主干路并和住宅保持距离。`, severity: 58 - zoning.industrialScore });
+  if (fiscal?.score < 50) needs.push({ id: "fiscal", title: "财政安全不足", detail: `财政评分 ${Math.round(fiscal.score)}%，周净收益 ${money(fiscal.net)}，优先减少维护费或提高税基。`, severity: 50 - fiscal.score + fiscal.deficitWeeks * 3 });
+  if (fiscal?.deficitWeeks >= 3) needs.push({ id: "deficit", title: "连续赤字", detail: `最近 ${fiscal.deficitWeeks} 周出现赤字，现金储备约 ${Math.max(0, Math.round(fiscal.reserveWeeks))} 周维护费。`, severity: 18 + fiscal.deficitWeeks * 4 });
   if (pollution > 24) needs.push({ id: "pollution", title: "污染靠近住宅", detail: `住宅平均污染 ${Math.round(pollution)}，工业区需要隔离或公园缓冲。`, severity: pollution - 24 });
   return needs.sort((a, b) => b.severity - a.severity).slice(0, 4);
 }
@@ -685,6 +704,7 @@ const city = {
     transport: 0,
     pollution: 0,
     servicePressure: {},
+    fiscal: { score: 80, net: 0, reserveWeeks: 0, deficitWeeks: 0, happiness: 0 },
     happinessReasons: [],
     residentNeeds: [],
   },
@@ -1868,10 +1888,24 @@ function computeStats() {
   const trafficPenalty = Math.max(0, 76 - city.stats.traffic - transportRelief) * 0.24 + routeStats.unreachableResidents * 0.45;
   const pollutionPenalty = Math.min(24, pollution * 0.16);
   const impact = eventImpact();
+  const incomeEfficiency = clamp(0.55 + city.stats.traffic / 180, 0.45, 1);
+  const residentialTax = routeStats.reachableResidents * BUILDINGS.residential.tax * (residential.length ? residential.reduce((sum, building) => sum + levelMultiplier("tax", buildingLevel(building)), 0) / residential.length : 1);
+  const commercialLocationMultiplier = clamp(commercialScore / 82, 0.72, 1.28);
+  const industrialLocationMultiplier = clamp(industrialScore / 82, 0.74, 1.22);
+  const income =
+    residentialTax +
+    commercial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * commercialLocationMultiplier, 0) +
+    industrial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * industrialLocationMultiplier, 0);
+  const roadMaintenance = roads.reduce((sum, tile) => sum + ROAD_TIERS[tile.roadTier].maintenance, 0);
+  const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + buildingValue(building, "maintenance"), 0);
+  const adjustedIncome = income * impact.incomeMultiplier + impact.incomeDelta;
+  const adjustedMaintenance = maintenance + impact.maintenanceDelta;
+  const fiscal = fiscalHealth({ money: city.stats.money, income: adjustedIncome, maintenance: adjustedMaintenance });
   const happinessReasons = [
     impactItem("base", "基础生活", GAME_BALANCE.baseHappiness, "positive"),
     impactItem("service", "服务与公园", serviceBoost, "positive"),
     impactItem("zoning", "宜居区位", zoningBoost, zoningBoost >= 0 ? "positive" : "negative"),
+    impactItem("fiscal", "财政安全", fiscal.happiness, fiscal.happiness >= 0 ? "positive" : "negative"),
     impactItem("avenue", "樱花大道", Math.min(8, avenueBoost), "positive"),
     impactItem("bonus", "章节奖励", city.modifiers.happinessBonus, "positive"),
     impactItem("event", "城市事件", impact.happinessDelta, impact.happinessDelta >= 0 ? "positive" : "negative"),
@@ -1895,20 +1929,8 @@ function computeStats() {
     routeStats,
     servicePressure: city.stats.servicePressure,
     zoning: { residentialScore, commercialScore, industrialScore },
+    fiscal,
   });
-
-  const incomeEfficiency = clamp(0.55 + city.stats.traffic / 180, 0.45, 1);
-  const residentialTax = routeStats.reachableResidents * BUILDINGS.residential.tax * (residential.length ? residential.reduce((sum, building) => sum + levelMultiplier("tax", buildingLevel(building)), 0) / residential.length : 1);
-  const commercialLocationMultiplier = clamp(commercialScore / 82, 0.72, 1.28);
-  const industrialLocationMultiplier = clamp(industrialScore / 82, 0.74, 1.22);
-  const income =
-    residentialTax +
-    commercial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * commercialLocationMultiplier, 0) +
-    industrial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * industrialLocationMultiplier, 0);
-  const roadMaintenance = roads.reduce((sum, tile) => sum + ROAD_TIERS[tile.roadTier].maintenance, 0);
-  const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + buildingValue(building, "maintenance"), 0);
-  const adjustedIncome = income * impact.incomeMultiplier + impact.incomeDelta;
-  const adjustedMaintenance = maintenance + impact.maintenanceDelta;
 
   city.stats.population = city.residents.length;
   city.stats.capacity = capacity;
@@ -1929,6 +1951,7 @@ function computeStats() {
     industrial: industrialScore,
     overall: zoningScore,
   };
+  city.stats.fiscal = fiscal;
   city.stats.happinessReasons = happinessReasons;
   city.stats.residentNeeds = residentNeeds;
   city.stats.unreachableResidents = routeStats.unreachableResidents;
@@ -2000,6 +2023,7 @@ function advisorMessages() {
   if (city.stats.employmentRate < 72 && city.stats.population > 80) messages.push({ title: "岗位不可达", text: "增加商业/工业，并确保居民能沿道路到达岗位。" });
   if (city.stats.pollution > 38) messages.push({ title: "污染偏高", text: "工业区离住宅太近了，可以用公园缓冲。" });
   if (city.stats.education < 35 && city.stats.population > 150) messages.push({ title: "教育覆盖低", text: "学校会让居民更安心，也能提升长期幸福度。" });
+  if (city.stats.fiscal?.score < 55) messages.push({ title: "财政承压", text: `周净收益 ${money(city.stats.fiscal.net)}。先放缓高维护扩建，补足商业税基。` });
   if (messages.length === 0) messages.push({ title: "道路很顺畅", text: "居民的通勤路线清晰，小镇正在轻快运转。" });
   return messages.slice(0, 4);
 }
@@ -2148,7 +2172,7 @@ function renderUI() {
         .join("")
     : "暂无成就";
   els.saveStatus.textContent = city.saveStatus;
-  els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 人口 ${city.report.trends.population} / 资金 ${city.report.trends.money} / 交通 ${city.report.trends.traffic} / 幸福 ${city.report.trends.happiness}。`;
+  els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 财政 ${Math.round(stats.fiscal?.score || 0)}% / 储备 ${Math.max(0, Math.round(stats.fiscal?.reserveWeeks || 0))} 周 / 人口 ${city.report.trends.population} / 资金 ${city.report.trends.money} / 交通 ${city.report.trends.traffic} / 幸福 ${city.report.trends.happiness}。`;
 }
 
 function updateHover() {

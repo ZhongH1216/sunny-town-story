@@ -590,6 +590,83 @@ test("P3 commercial and industrial zoning affects tax income", async ({ page }) 
   await expect(page.locator("#selectedInfo")).toContainText("商业区位");
 });
 
+test("P3 fiscal health explains deficits and reserve pressure", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(32000);
+    for (let x = 2; x <= 14; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    t.place("power", 3, 7);
+    t.place("water", 4, 7);
+    t.place("residential", 5, 5);
+    t.place("residential", 6, 5);
+    t.place("commercial", 7, 7);
+    t.advanceWeek(18);
+    t.place("park", 8, 7);
+    t.place("school", 9, 7);
+    t.place("plaza", 10, 7);
+    t.advanceWeek(6);
+    t.place("fire", 11, 7);
+    t.place("lantern", 12, 7);
+    t.place("station", 13, 7);
+    t.setMoney(-18000);
+    t.advanceWeek(8);
+  });
+
+  const after = await state(page);
+  expect(after.stats.fiscal.score).toBeLessThan(55);
+  expect(after.stats.happinessReasons.some((reason) => reason.id === "fiscal" && reason.value < 0)).toBe(true);
+  expect(after.stats.residentNeeds.some((need) => ["fiscal", "deficit"].includes(need.id))).toBe(true);
+  await expect(page.locator("#happinessBreakdown")).toContainText(/财政安全|连续赤字|财政安全不足/);
+  await expect(page.locator("#reportDetails")).toContainText("财政");
+});
+
+test("P3 300-week balanced simulation stays finite and playable", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.setMoney(1200000);
+    for (const z of [2, 4, 6, 8, 10, 12, 14, 16]) {
+      for (let x = 2; x <= 15; x += 1) t.place("road", x, z, { tier: "avenue" });
+    }
+    for (const x of [2, 5, 8, 11, 14]) {
+      for (let z = 2; z <= 16; z += 1) t.place("road", x, z, { tier: "avenue" });
+    }
+    [
+      ["power", 2, 3], ["water", 3, 3], ["power", 4, 3], ["water", 6, 3],
+      ["power", 7, 3], ["water", 9, 3], ["power", 10, 3], ["water", 12, 3],
+      ["power", 13, 3], ["water", 15, 3], ["power", 2, 15], ["water", 5, 15],
+      ["power", 8, 15], ["water", 11, 15], ["power", 14, 15], ["water", 15, 15],
+      ["power", 2, 17], ["water", 5, 17], ["power", 8, 17], ["water", 11, 17],
+      ["power", 14, 17],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+    const reserved = new Set(["6,5", "9,5", "12,5", "6,7", "9,7", "12,7", "6,9", "9,9", "12,9", "6,11", "9,11", "12,11", "12,13"]);
+    const homes = [];
+    for (const z of [1, 5, 7, 9, 11, 13, 17]) {
+      for (const x of [3, 4, 6, 7, 9, 10, 12, 13]) {
+        if (!reserved.has(`${x},${z}`)) homes.push([x, z]);
+      }
+    }
+    homes.slice(0, 46).forEach(([x, z]) => t.place("residential", x, z));
+    [[3, 15], [4, 15], [6, 15], [7, 15], [9, 15], [10, 15], [12, 15], [13, 15]].forEach(([x, z]) => t.place("commercial", x, z));
+    [[15, 5], [15, 7], [15, 9]].forEach(([x, z]) => t.place("industrial", x, z));
+    t.advanceWeek(40);
+    [["park", 6, 5], ["park", 6, 7], ["park", 6, 9], ["school", 9, 5], ["school", 9, 7], ["school", 9, 9], ["fire", 12, 9], ["fire", 12, 11], ["plaza", 12, 5], ["plaza", 12, 7], ["station", 12, 13], ["lantern", 9, 11]].forEach(([type, x, z]) => t.place(type, x, z));
+    t.advanceWeek(260);
+  });
+
+  const after = await state(page);
+  const numericStats = Object.values(after.stats).filter((value) => typeof value === "number");
+  expect(numericStats.every(Number.isFinite)).toBe(true);
+  expect(after.history.length).toBeGreaterThan(0);
+  expect(after.history.every((item) => Number.isFinite(item.population) && Number.isFinite(item.money) && Number.isFinite(item.net))).toBe(true);
+  expect(after.stats.population).toBeGreaterThan(500);
+  expect(after.stats.happiness).toBeGreaterThan(45);
+  expect(after.stats.money).toBeGreaterThan(-10000);
+  expect(after.stats.fiscal.score).toBeGreaterThan(35);
+  expect(after.residents.every((resident) => Number.isFinite(resident.commuteTime))).toBe(true);
+});
+
 test("P2 landmarks, chapter rewards and weekly trends are visible", async ({ page }) => {
   await page.goto("/?test=1");
   await page.evaluate(() => {
