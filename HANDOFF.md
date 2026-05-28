@@ -7,6 +7,7 @@
 - 项目名：`sunny-town-story`
 - 中文名：阳光小镇物语
 - 类型：桌面端 3D 休闲城市经营游戏
+- 当前阶段：P4 收尾完成，下一步进入 P5 发布准备
 - 画风：日系阳光小镇、低多边形、奶油色 HUD、樱花和玩具感建筑
 - 技术：Python 静态服务 + Three.js + 原生 JavaScript + Playwright
 - 主分支：`main`
@@ -22,7 +23,7 @@ npm.cmd test
 预期：
 
 ```text
-7 passed
+31 passed
 ```
 
 ## 用户偏好和需求背景
@@ -63,7 +64,7 @@ npm.cmd test
 - 如果 Python 不在 PATH 中，复制 `.env.example` 为 `.env` 并填写本机路径。
 - 新电脑推荐直接运行 `.\scripts\setup-dev.bat`，它会创建/更新 `sunny-town-dev`、安装 npm 依赖和 Playwright Chromium。
 - 如浏览器下载较慢，可先执行 `.\scripts\setup-dev.bat --skip-browsers`，之后再运行 `npm.cmd run install:browsers`。
-- 当前已验证：`npm.cmd test` 在提升权限环境下通过 `7 passed`。普通沙箱中启动 Playwright Chromium 可能报 `spawn EPERM`，这是运行权限限制，不是项目测试失败。
+- 当前已验证：`npm.cmd run check`、`npm.cmd run assets:textures`、`npm.cmd run test:visual` 和 `npm.cmd test` 通过，完整测试预期 `31 passed`。普通沙箱中启动 Playwright Chromium 可能报 `spawn EPERM`，这是运行权限限制，不是项目测试失败。
 - Windows PowerShell 直接 `Get-Content` 中文 UTF-8 文件时可能显示乱码，但浏览器、GitHub 和测试按 UTF-8 正常渲染。
 
 ## 核心文件
@@ -88,6 +89,7 @@ Python 标准库静态服务器。
 - 顶部城市指标 HUD
 - 左侧建造工具栏
 - 普通道路 / 樱花大道道路模式切换
+- 音乐、静音、音量、撤销、回中、缩放和快捷键提示控件
 - 右侧城市顾问、交通概况、选中地块信息
 - 底部时间、速度、暂停、当前工具提示
 
@@ -117,16 +119,35 @@ Python 标准库静态服务器。
 - 常量配置：网格尺寸、每周秒数、初始资金、最大移动体数
 - `ROAD_TIERS`：普通道路和樱花大道的成本、维护费、容量、颜色和速度
 - `BUILDINGS`：建筑成本、维护、税收、容量、岗位、服务、污染
-- `city`：全局城市状态、地块、建筑、居民、视觉移动体、寻路缓存、道路版本号
+- `city`：全局城市状态、地块、建筑、居民、视觉移动体、寻路缓存、道路版本号、章节、成就、事件、设置和撤销栈
+- `src/asset-manifest.js`：P4 贴图、音效和音乐循环清单
 - Three.js 场景：相机、灯光、地块、道路、建筑、树、云、樱花、移动体、气泡
+- 资源加载：PNG 像素贴图优先，失败后回退到运行时 canvas 贴图
 - 道路系统：`roadTier`、`roadMask`、道路 mesh、自动连接刷新
 - 寻路系统：A*、路径缓存、居民路线分配
 - 交通系统：道路流量、容量、拥堵率、交通评分
-- 建造/拆除：`place`、`bulldoze`、`canBuild`
+- 建造/拆除/升级/撤销：`place`、`bulldoze`、`upgradeSelectedBuilding`、`undoLastAction`、`canBuild`
 - 模拟结算：`computeStats`、`advanceWeek`
 - UI 渲染：`renderUI`、`advisorMessages`、`selectedDescription`
-- 交互：工具选择、道路等级选择、地图点击、拖拽平移、滚轮缩放
+- 交互：工具选择、道路等级选择、地图点击、拖拽平移、滚轮缩放、镜头回中、快捷键、音量设置
 - 测试接口：`window.sunnyTownTest`，仅 `?test=1` 暴露
+
+### `src/asset-manifest.js`
+
+P4 资源清单。
+
+包含：
+
+- `textures`：住宅、商业、工业、服务建筑和地标的 PNG 路径、调色板和标签
+- `audioCues`：UI、建造、道路、拆除、升级、周报、章节和警告音效参数
+- `musicLoop`：WebAudio 背景音乐循环参数
+- `assetManifestSummary()`：测试和调试用摘要
+
+### `docs/ASSET_PIPELINE.md`
+
+像素贴图和 AI 辅助资源制作流程。
+
+当前 checked-in PNG 是可复现占位资产。后续替换最终美术时保持 `src/asset-manifest.js` 的 id 和路径稳定，再运行视觉回归即可。
 
 ### `tests/smoke.spec.js`
 
@@ -143,6 +164,31 @@ Playwright 测试。
 - 断路时出现不可达通勤顾问提示
 - 大量通勤使普通道路拥堵并降低交通评分
 - 视觉移动体数量不超过 60
+- P1 存档、章节、成就、升级和手动保存
+- P2 地标、章节奖励、周报趋势、复合解锁、升级规则、新手任务链和 200 周通关
+- P3 服务道路可达、容量压力、区位收益、财政压力和 300 周长局稳定性
+- P4 音频设置、资源清单、快捷键、撤销、镜头控制和表现动效
+
+### `tests/visual.spec.js`
+
+Playwright 视觉回归测试。
+
+当前覆盖：
+
+- 1440 x 900 桌面断点
+- 1366 x 768 桌面断点
+- 核心 HUD、建造栏、顾问栏、底部栏和 WebGL canvas 可见
+- 输出 `test-results/visual-1440x900.png` 和 `test-results/visual-1366x768.png`
+
+### `tools/generate-textures.js`
+
+P4 资源生成脚本。
+
+职责：
+
+- 读取 `src/asset-manifest.js`
+- 按调色板生成确定性的 16 x 16 PNG 占位贴图
+- 写入 `assets/textures/buildings/` 和 `assets/textures/landmarks/`
 
 ### `tools/run-tests.js`
 
@@ -324,9 +370,17 @@ window.sunnyTownTest
 ```js
 window.sunnyTownTest.place(type, x, z, options)
 window.sunnyTownTest.advanceWeek(count)
+window.sunnyTownTest.saveGame(manual)
+window.sunnyTownTest.loadSave(snapshot)
+window.sunnyTownTest.serializeGame()
+window.sunnyTownTest.startNewGame(options)
+window.sunnyTownTest.upgradeSelectedBuilding()
 window.sunnyTownTest.findPathByRoads(start, end)
 window.sunnyTownTest.getState()
+window.sunnyTownTest.upgradeState(x, z)
 window.sunnyTownTest.setMoney(amount)
+window.sunnyTownTest.setSettings(settings)
+window.sunnyTownTest.undo()
 ```
 
 示例：
@@ -342,6 +396,15 @@ window.sunnyTownTest.getState();
 
 - `stats`
 - `week`
+- `chapterIndex`
+- `saveStatus`
+- `settings`
+- `assetManifest`
+- `assetRuntime`
+- `effectCount`
+- `musicEnabled`
+- `undoDepth`
+- `camera`
 - `selectedTool`
 - `selectedRoadTier`
 - `roadVersion`
@@ -424,35 +487,33 @@ debug.log
 
 ## 已知问题和注意事项
 
-1. 没有存档系统，刷新页面会重置城市。
-2. 没有道路升级工具，当前需要拆除重铺才能把普通道路换成樱花大道。
-3. 地图大小固定，暂无随机地图或扩展地图。
-4. 所有 3D 模型都是基础几何体组合，没有贴图或 GLTF 模型。
-5. 当前模拟是休闲化 V1，数值模型强调可演示和反馈清晰，不追求真实城市级复杂度。
-6. 不做移动端适配，不要为了小屏牺牲桌面 HUD。
+1. 地图大小固定，暂无随机地图或扩展地图。
+2. 当前 PNG 贴图为可复现占位资产，最终 AI 辅助或手工美术替换仍留到 P5 前资源制作。
+3. 建筑、车辆、居民、道路和粒子仍主要由 Three.js 基础几何体组合，建筑表面已优先加载项目内 PNG 像素贴图并保留 canvas 回退；暂未引入 GLTF 模型。
+4. 当前模拟是休闲化 V1，数值模型强调可演示和反馈清晰，不追求真实城市级复杂度。
+5. P4 已做桌面视觉回归，移动端仍不作为目标平台，不要为了小屏牺牲桌面 HUD。
+6. 60 分钟以上人工 QA、满图性能基线和最终发布包仍属于 P5。
 
 ## 推荐后续任务
 
 高优先级：
 
-- 增加 `localStorage` 存档 / 读档。
-- 增加道路升级工具：点击普通道路可付费升级为樱花大道。
-- 增加建筑升级系统：住宅、公寓、商店街、工坊等等级。
-- 增加更详细的地块详情，例如服务覆盖、税收、维护、污染、可达性原因。
+- 完成 P5 QA：新游戏、继续游戏、坏存档、章节通关、极端城市、长期运行和低性能设备。
+- 替换当前占位 PNG 为最终 AI 辅助或手工像素贴图，并保持 `src/asset-manifest.js` 路径稳定。
+- 完成 README 玩家说明、游戏内帮助页、版本号、更新日志和已知问题。
 
 中优先级：
 
-- 增加目标章节：新居民入住、商店街复兴、春日祭典。
-- 加入更多日系装饰：便利店、神社、小河、桥、车站、祭典灯笼。
-- 增加音效开关和背景音乐。
-- 增加周报图表，显示人口、资金、交通和幸福度趋势。
+- 做满图、满居民、满移动体性能基线，必要时优化材质、移动体和 UI 刷新。
+- 补充存档导入/导出文件和坏存档 UI 恢复提示。
+- 评估离线发布包；默认 1.0 前仍保持桌面浏览器本地运行。
 
 低优先级：
 
 - 随机地图种子。
 - 截图导出。
 - 英文语言支持。
-- 移动端布局。
+- Electron/Tauri 桌面包装。
 
 ## 接手建议
 
@@ -475,6 +536,8 @@ npm.cmd run serve
 - 道路是否能自动形成直线、转角、T 字和十字
 - 住宅、商业、工业之间是否有小车或行人移动
 - 拥堵路段是否出现暖色覆盖
-- 顾问面板是否根据断路、拥堵、缺电、缺水实时更新
+- 顾问面板是否根据断路、拥堵、缺电、缺水、服务容量和财政压力实时更新
+- 背景音乐、音效、静音、撤销、镜头回中和缩放是否正常
+- `npm.cmd run test:visual` 的 1440 x 900 与 1366 x 768 截图是否无明显遮挡
 
 任何改动完成后都要重新运行 `npm.cmd test`。

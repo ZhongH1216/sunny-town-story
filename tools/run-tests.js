@@ -83,7 +83,7 @@ async function main() {
 
   try {
     await waitForServer();
-    const code = await run(process.execPath, [playwrightCli, "test", "--config=playwright.config.js"], {
+    const code = await run(process.execPath, [playwrightCli, "test", "--config=playwright.config.js", ...process.argv.slice(2)], {
       env: { ...process.env, PLAYWRIGHT_SKIP_WEBSERVER: "1" },
     });
     process.exitCode = code;

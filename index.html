@@ -114,7 +114,21 @@
         <section class="time-controls">
           <button id="pauseButton" type="button">暂停</button>
           <button id="speedButton" type="button">速度 x1</button>
+          <button id="undoButton" class="compact-control" type="button" title="撤销上一项建造操作">↶</button>
+          <button id="zoomOutButton" class="compact-control" type="button" title="缩小视野">−</button>
+          <button id="zoomInButton" class="compact-control" type="button" title="放大视野">+</button>
+          <button id="centerCameraButton" class="compact-control" type="button" title="回到小镇中心">⌂</button>
           <strong id="calendar">春季 第 1 周</strong>
+        </section>
+        <section class="settings-strip" aria-label="音频和快捷键设置">
+          <button id="muteButton" class="icon-button" type="button" title="静音 / 恢复">♪</button>
+          <button id="musicButton" class="icon-button active" type="button" title="背景音乐开关">♫</button>
+          <label class="volume-control" title="主音量">
+            <span>音量</span>
+            <input id="volumeSlider" type="range" min="0" max="100" value="45" />
+          </label>
+          <button id="shortcutHelpButton" class="icon-button" type="button" title="快捷键">?</button>
+          <small id="shortcutHint">1-4 工具 / B 拆除 / U 撤销 / V 速度 / C 回中 / +/- 缩放 / 空格暂停</small>
         </section>
         <section class="tool-hint">
           <span id="currentTool">当前：道路</span>

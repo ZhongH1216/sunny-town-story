@@ -50,12 +50,14 @@ button {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 286px 1fr 320px;
-  grid-template-rows: auto 1fr auto;
-  gap: 18px;
+  grid-template-columns: 276px minmax(440px, 1fr) 306px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
   min-width: 1180px;
-  min-height: 760px;
-  padding: 20px;
+  min-height: 0;
+  height: 100dvh;
+  padding: 16px;
+  overflow: hidden;
   pointer-events: none;
 }
 
@@ -68,10 +70,12 @@ button {
 
 .top-hud {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .brand {
@@ -98,9 +102,9 @@ button {
 
 .city-stats {
   display: grid;
-  grid-template-columns: repeat(7, minmax(96px, 1fr));
+  grid-template-columns: repeat(7, minmax(72px, 1fr));
   gap: 8px;
-  min-width: 820px;
+  min-width: 0;
 }
 
 .city-stats div,
@@ -148,7 +152,7 @@ button {
   display: grid;
   grid-template-columns: repeat(3, minmax(72px, 1fr));
   gap: 8px;
-  width: 286px;
+  width: 280px;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -196,16 +200,19 @@ button {
 .build-panel {
   grid-column: 1;
   grid-row: 2;
-  align-self: center;
+  align-self: stretch;
+  min-height: 0;
+  overflow: auto;
   padding: 16px;
 }
 
 .advisor-panel {
   grid-column: 3;
   grid-row: 2;
-  align-self: center;
+  align-self: stretch;
+  min-height: 0;
   padding: 16px;
-  max-height: calc(100vh - 176px);
+  max-height: none;
   overflow: auto;
 }
 
@@ -597,10 +604,11 @@ button {
 .bottom-bar {
   grid-column: 1 / -1;
   grid-row: 3;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(300px, 460px) minmax(260px, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  justify-content: initial;
+  gap: 14px;
   padding: 12px 18px;
 }
 
@@ -621,8 +629,24 @@ button {
   cursor: pointer;
 }
 
+.time-controls .compact-control {
+  min-width: 38px;
+  width: 38px;
+  padding: 0;
+  border-radius: 8px;
+  background: #fffdf6;
+  color: #4d6872;
+  border: 1px solid rgba(103, 184, 255, 0.34);
+}
+
 .time-controls button:nth-child(2) {
   background: #67b8ff;
+}
+
+.time-controls button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.45);
+  opacity: 0.55;
 }
 
 .time-controls strong {
@@ -630,11 +654,67 @@ button {
   color: #4d6872;
 }
 
+.settings-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(103, 184, 255, 0.34);
+  border-radius: 8px;
+  background: #fffdf6;
+  color: #4d6872;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.icon-button.active,
+.icon-button.is-muted {
+  background: #fff3ed;
+  color: #d26687;
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #607479;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.volume-control input {
+  width: 94px;
+  accent-color: #67b8ff;
+}
+
+#shortcutHint {
+  display: none;
+  max-width: 210px;
+  color: #6f8085;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#shortcutHint.is-open {
+  display: block;
+}
+
 .tool-hint {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
+  justify-content: flex-end;
 }
 
 .tool-hint span {

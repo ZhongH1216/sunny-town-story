@@ -20,6 +20,27 @@ async function state(page) {
   return page.evaluate(() => window.sunnyTownTest.getState());
 }
 
+async function viewportBoxes(page, selectors) {
+  return page.evaluate((items) => {
+    return items.map((selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return { selector, found: false };
+      const rect = node.getBoundingClientRect();
+      return {
+        selector,
+        found: true,
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        inViewport: rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight,
+      };
+    });
+  }, selectors);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
@@ -34,10 +55,192 @@ test("sunny town renders the desktop 3D builder and traffic HUD", async ({ page 
   await expect(page.locator("#chapterTitle")).toContainText("第一章");
   await expect(page.locator("#saveButton")).toBeVisible();
   await expect(page.locator("#upgradeButton")).toBeVisible();
+  await expect(page.locator("#undoButton")).toBeVisible();
+  await expect(page.locator("#muteButton")).toBeVisible();
+  await expect(page.locator("#musicButton")).toBeVisible();
+  await expect(page.locator("#volumeSlider")).toBeVisible();
+  await expect(page.locator("#shortcutHelpButton")).toBeVisible();
   await expect(page.locator("#scene")).toBeVisible();
   await page.waitForTimeout(1200);
   await page.screenshot({ path: "test-results/sunny-town-desktop.png", fullPage: true });
   await expect(await canvasSignal(page)).toBeGreaterThan(1000);
+});
+
+test("P4 audio settings and shortcuts update the tool flow", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.locator("#shortcutHelpButton").click();
+  await expect(page.locator("#shortcutHint")).toBeVisible();
+  await page.locator("#volumeSlider").fill("20");
+  await page.locator("#muteButton").click();
+  let after = await state(page);
+  expect(after.settings.volume).toBeCloseTo(0.2);
+  expect(after.settings.muted).toBe(true);
+  expect(after.musicEnabled).toBe(false);
+
+  await page.locator("#musicButton").click();
+  after = await state(page);
+  expect(after.settings.music).toBe(false);
+  expect(after.settings.muted).toBe(false);
+  expect(after.musicEnabled).toBe(false);
+
+  await page.keyboard.press("Digit2");
+  after = await state(page);
+  expect(after.selectedTool).toBe("residential");
+  await page.keyboard.press("KeyB");
+  after = await state(page);
+  expect(after.selectedTool).toBe("bulldoze");
+  await page.keyboard.press("Space");
+  after = await state(page);
+  expect(after.selectedTool).toBe("bulldoze");
+  await expect(page.locator("#pauseButton")).toContainText("继续");
+  await page.keyboard.press("KeyV");
+  await expect(page.locator("#speedButton")).toContainText("速度 x2");
+  await page.keyboard.press("Escape");
+  after = await state(page);
+  expect(after.selectedTool).toBe("road");
+});
+
+test("P4 asset manifest is exposed for texture and audio production", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.waitForTimeout(800);
+  const { assetManifest: manifest, assetRuntime: runtime } = await state(page);
+  expect(manifest.style).toBe("warm-pixel-lowpoly");
+  expect(manifest.textureMode).toBe("file-png-with-canvas-fallback");
+  expect(manifest.audioMode).toBe("web-audio-synth");
+  expect(manifest.textureCount).toBeGreaterThanOrEqual(11);
+  expect(manifest.audioCueCount).toBeGreaterThanOrEqual(8);
+  expect(manifest.musicNoteCount).toBeGreaterThanOrEqual(8);
+  expect(runtime.textureMode).toBe(manifest.textureMode);
+  expect(runtime.cachedTextures).toBeGreaterThanOrEqual(manifest.textureCount);
+  expect(runtime.loadedTextures).toBeGreaterThanOrEqual(manifest.textureCount);
+  expect(runtime.failedTextures).toBe(0);
+});
+
+test("P4 desktop visual frame keeps core controls inside 16:9 viewports", async ({ page }) => {
+  const selectors = [
+    ".top-hud",
+    ".build-panel",
+    ".advisor-panel",
+    ".bottom-bar",
+    "#pauseButton",
+    "#speedButton",
+    "#undoButton",
+    "#zoomOutButton",
+    "#zoomInButton",
+    "#centerCameraButton",
+    "#muteButton",
+    "#musicButton",
+    "#volumeSlider",
+    "#shortcutHelpButton",
+    "#currentTool",
+  ];
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1366, height: 768 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/?test=1");
+    await page.waitForTimeout(900);
+    const boxes = await viewportBoxes(page, selectors);
+    for (const box of boxes) {
+      expect(box, `${box.selector} missing at ${viewport.width}x${viewport.height}`).toMatchObject({ found: true });
+      expect(box.inViewport, `${box.selector} overflows at ${viewport.width}x${viewport.height}: ${JSON.stringify(box)}`).toBe(true);
+      expect(box.width, `${box.selector} width collapsed at ${viewport.width}x${viewport.height}`).toBeGreaterThan(0);
+      expect(box.height, `${box.selector} height collapsed at ${viewport.width}x${viewport.height}`).toBeGreaterThan(0);
+    }
+    await expect(await canvasSignal(page)).toBeGreaterThan(1000);
+  }
+});
+
+test("P4 one-step undo restores the last build action", async ({ page }) => {
+  await page.goto("/?test=1");
+  const before = await state(page);
+  await page.evaluate(() => {
+    window.sunnyTownTest.place("road", 3, 3, { tier: "lane" });
+    window.sunnyTownTest.place("residential", 3, 4);
+  });
+  let after = await state(page);
+  expect(after.roadCount).toBe(before.roadCount + 1);
+  expect(after.buildingCount).toBe(before.buildingCount + 1);
+  expect(after.undoDepth).toBe(2);
+  expect(after.undoLabel).toContain("住宅");
+  await expect(page.locator("#undoButton")).toBeEnabled();
+
+  await page.locator("#undoButton").click();
+  after = await state(page);
+  expect(after.roadCount).toBe(before.roadCount + 1);
+  expect(after.buildingCount).toBe(before.buildingCount);
+  expect(after.undoDepth).toBe(1);
+  expect(after.messages[0]).toContain("已撤销");
+
+  await page.keyboard.press("KeyU");
+  after = await state(page);
+  expect(after.roadCount).toBe(before.roadCount);
+  expect(after.buildingCount).toBe(before.buildingCount);
+  expect(after.undoDepth).toBe(0);
+});
+
+test("P4 camera controls zoom, recenter and clamp panning", async ({ page }) => {
+  await page.goto("/?test=1");
+  const cameraState = () =>
+    page.evaluate(() => window.sunnyTownTest.getState().camera);
+
+  const before = await cameraState();
+  await page.locator("#zoomInButton").click();
+  let after = await cameraState();
+  expect(after.zoom).toBeGreaterThan(before.zoom);
+
+  await page.keyboard.press("Minus");
+  after = await cameraState();
+  expect(after.zoom).toBeCloseTo(before.zoom, 1);
+
+  await page.locator("#scene").dispatchEvent("pointerdown", { clientX: 700, clientY: 450, pointerId: 1 });
+  await page.locator("#scene").dispatchEvent("pointermove", { clientX: -1200, clientY: -1200, pointerId: 1 });
+  await page.locator("#scene").dispatchEvent("pointerup", { clientX: -1200, clientY: -1200, pointerId: 1 });
+  after = await cameraState();
+  expect(Math.abs(after.target.x)).toBeLessThanOrEqual(after.limit);
+  expect(Math.abs(after.target.z)).toBeLessThanOrEqual(after.limit);
+
+  await page.keyboard.press("KeyC");
+  after = await cameraState();
+  expect(after.zoom).toBeCloseTo(1, 2);
+  expect(Math.abs(after.target.x)).toBeLessThan(0.01);
+  expect(Math.abs(after.target.z)).toBeLessThan(0.01);
+});
+
+test("P4 construction, upgrade, tax and population feedback spawn effects", async ({ page }) => {
+  await page.goto("/?test=1");
+  const before = await state(page);
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 3, 3, { tier: "lane" });
+    t.place("residential", 3, 4);
+  });
+  let after = await state(page);
+  expect(after.effectCount).toBeGreaterThan(before.effectCount);
+
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 4, 5, { tier: "avenue" });
+    t.place("road", 5, 5, { tier: "avenue" });
+    t.place("road", 6, 5, { tier: "avenue" });
+    t.place("residential", 4, 6);
+    t.place("power", 5, 6);
+    t.place("water", 6, 6);
+    t.setMoney(80000);
+    t.advanceWeek(10);
+    t.setSelectedTile(4, 6);
+    t.upgradeSelectedBuilding();
+  });
+  after = await state(page);
+  expect(after.effectCount).toBeGreaterThan(0);
+  expect(after.buildings.find((building) => building.x === 4 && building.z === 6).level).toBeGreaterThanOrEqual(2);
+
+  await page.evaluate(() => window.sunnyTownTest.advanceWeek(2));
+  after = await state(page);
+  expect(after.effectCount).toBeGreaterThan(0);
+  expect(after.report.trends.population).toMatch(/[↑↓→]/);
 });
 
 test("lane roads and sakura avenues can both be placed", async ({ page }) => {

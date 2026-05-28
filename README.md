@@ -1,6 +1,6 @@
 # 阳光小镇物语
 
-一个使用 Three.js 制作的桌面 3D 休闲城市经营游戏。当前版本已经从单纯的小镇摆放演示升级为带道路等级、居民通勤寻路、道路流量、拥堵反馈、小车和行人动画的“日系阳光小镇经营”原型。
+一个使用 Three.js 制作的桌面 3D 休闲城市经营游戏。当前版本已经推进到 P4 收尾：在道路等级、居民通勤、拥堵反馈和小车/行人动画基础上，加入了存档、章节目标、建筑升级、事件、成就、服务容量、区位策略、音效动效、撤销、镜头控制和第一批像素贴图资产。
 
 项目采用中文界面，视觉方向是蓝天、草地、云朵、樱花、奶油色 HUD 和低多边形玩具感建筑。玩法参考城市建设经营游戏，但节奏更轻松，适合展示和继续迭代。
 
@@ -23,9 +23,16 @@ test-results/sunny-town-desktop.png
 - A* 道路寻路，使用道路版本号缓存路线
 - 道路流量、容量、拥堵率和全城交通评分
 - 最多 60 个真实路线采样的可视化移动体，包括小车和行人
-- 建筑落地弹跳、云朵漂移、树冠轻摆、樱花飘落、金币/人口/幸福度气泡
-- 城市顾问实时提示断路、无通勤路径、拥堵、缺水、缺电、就业不足等问题
-- Playwright 自动化测试覆盖核心玩法
+- 版本化本地存档、继续游戏、手动保存、自动保存、新游戏和存档迁移入口
+- 5 章主线目标、新手任务链、章节奖励、成就、城市事件和周报趋势
+- 建筑升级、复合解锁条件、地标装饰和升级外观差异
+- 服务覆盖结合半径、道路可达和容量压力，幸福度会拆分显示具体原因
+- 建筑落地弹跳、云朵漂移、树冠轻摆、樱花飘落、施工/升级/税收/人口/章节反馈
+- WebAudio 背景音乐和操作音效，支持静音、音量和音乐开关
+- 一步撤销、快捷键、镜头回中、缩放按钮和拖拽边界
+- `AssetManifest` 管理像素贴图、音频提示和资源路径，PNG 贴图优先加载并保留 canvas 回退
+- 城市顾问实时提示断路、无通勤路径、拥堵、缺水、缺电、就业不足、财政压力和服务缺口
+- Playwright 自动化测试覆盖核心玩法、长局模拟、P4 表现功能和桌面视觉回归
 
 ## 建造工具
 
@@ -41,6 +48,9 @@ test-results/sunny-town-desktop.png
 | 消防站 | 提升消防覆盖和居民安心感 |
 | 电力 | 为附近建筑供电 |
 | 水塔 | 为附近建筑供水 |
+| 小广场 | 提供文化和公园类服务，适合章节中期的宜居核心 |
+| 小车站 | 提供交通服务和主干路节点，适合商业/工业扩张 |
+| 祭典灯 | 提供节庆和文化氛围，提升附近住宅吸引力 |
 | 拆除 | 拆除建筑或道路，返还少量资金并刷新道路网络 |
 
 ## 经营系统
@@ -68,7 +78,12 @@ test-results/sunny-town-desktop.png
 - 商业和工业提供岗位与税收，居民需要能通过道路寻路到达目的地。
 - 无法寻路的居民会降低就业率、幸福度和建筑有效性。
 - 道路拥堵会降低交通评分，并间接降低税收效率和幸福度。
-- 电力、水力、就业、交通、污染、教育、消防和公园服务共同影响幸福度。
+- 电力、水力、就业、交通、污染、教育、消防、公园、文化、交通服务和财政健康共同影响幸福度。
+- 服务设施有容量压力，且需要道路可达才能稳定覆盖住宅。
+- 住宅、商业和工业有不同区位偏好，主干路、服务、污染隔离会影响成长效率。
+- 章节目标会逐步解锁建筑、道路策略和地标，完成后提供资金、幸福度或维护折扣等奖励。
+- 城市事件会制造短期经营压力或奖励，不会随机毁档。
+- 存档会保留城市网格、建筑、道路、资源、章节、任务、成就、设置和随机状态。
 - 资金低于 `-10,000` 并持续多周会触发财务危机提示。
 - 达到人口 `800`、幸福度 `75%`、资金为正时，会显示“阳光小镇已成型”，但仍可继续游玩。
 
@@ -89,12 +104,19 @@ test-results/sunny-town-desktop.png
 .
 ├─ app.py                  # Python 静态文件服务器
 ├─ index.html              # 游戏页面结构
+├─ assets/
+│  └─ textures/            # P4 像素 PNG 贴图资产
+├─ docs/
+│  └─ ASSET_PIPELINE.md    # 像素贴图和 AI 辅助资源制作流程
 ├─ src/
 │  ├─ app.js               # Three.js 场景、城市模拟、道路寻路、交通动画
+│  ├─ asset-manifest.js    # 贴图、音效和资源路径清单
 │  └─ styles.css           # 桌面 HUD 和日系阳光视觉样式
 ├─ tests/
-│  └─ smoke.spec.js        # Playwright 核心玩法测试
+│  ├─ smoke.spec.js        # Playwright 核心玩法、长局和 P4 表现测试
+│  └─ visual.spec.js       # 桌面视觉回归截图测试
 ├─ tools/
+│  ├─ generate-textures.js # 按资源清单生成可复现像素 PNG
 │  ├─ run-tests.js         # 启动 Python 服务并运行测试
 │  └─ start-server.js      # 后台启动本地服务
 ├─ package.json
@@ -157,12 +179,14 @@ SUNNY_TOWN_PORT=8765
 
 ```json
 {
-  "check": "node tools/check-env.js",
+  "assets:textures": "tools\\node-shim.cmd tools\\generate-textures.js",
+  "check": "tools\\node-shim.cmd tools\\check-env.js",
   "install:browsers": "npx playwright install chromium",
   "setup": "scripts\\setup-dev.bat",
-  "serve": "node tools/serve.js",
-  "start": "node tools/start-server.js",
-  "test": "node tools/run-tests.js"
+  "serve": "tools\\node-shim.cmd tools\\serve.js",
+  "start": "tools\\node-shim.cmd tools\\start-server.js",
+  "test": "tools\\node-shim.cmd tools\\run-tests.js",
+  "test:visual": "tools\\node-shim.cmd tools\\run-tests.js tests/visual.spec.js"
 }
 ```
 
@@ -237,7 +261,19 @@ npm.cmd test
 当前预期结果：
 
 ```text
-7 passed
+31 passed
+```
+
+视觉截图回归：
+
+```powershell
+npm.cmd run test:visual
+```
+
+资源贴图重新生成：
+
+```powershell
+npm.cmd run assets:textures
 ```
 
 测试覆盖：
@@ -248,9 +284,14 @@ npm.cmd test
 - 樱花大道容量高于普通道路
 - 道路 mask 自动更新为直线、转角、T 字和十字
 - 居民获得真实道路路线，人口和税收增长
+- 存档恢复道路、建筑、章节、建筑等级和成就
+- 章节奖励、复合解锁、升级条件、新手任务链和 P2 长局通关
+- 服务道路可达、容量压力、区位收益、财政压力和 P3 300 周长局
 - 断路或不可达时顾问面板出现交通提示
 - 大量通勤会提高普通道路拥堵并降低交通评分
 - 视觉移动体数量大于 0 且不超过 60
+- P4 音频设置、背景音乐开关、快捷键、撤销、镜头控制和表现动效
+- 1440 x 900、1366 x 768 视觉框架截图
 
 ## 测试接口
 
@@ -268,6 +309,14 @@ window.sunnyTownTest.advanceWeek(count)
 window.sunnyTownTest.findPathByRoads(start, end)
 window.sunnyTownTest.getState()
 window.sunnyTownTest.setMoney(amount)
+window.sunnyTownTest.saveGame(manual)
+window.sunnyTownTest.loadSave(snapshot)
+window.sunnyTownTest.serializeGame()
+window.sunnyTownTest.startNewGame(options)
+window.sunnyTownTest.upgradeSelectedBuilding()
+window.sunnyTownTest.upgradeState(x, z)
+window.sunnyTownTest.setSettings(settings)
+window.sunnyTownTest.undo()
 ```
 
 示例：
@@ -279,7 +328,7 @@ window.sunnyTownTest.advanceWeek(4);
 console.log(window.sunnyTownTest.getState().stats.traffic);
 ```
 
-`getState()` 会返回统计数据、道路列表、居民路线、顾问消息和视觉移动体数量，方便自动化测试和调试。
+`getState()` 会返回统计数据、章节、存档状态、设置、资源清单摘要、贴图加载状态、动效数量、撤销栈、镜头状态、道路列表、建筑列表、居民路线、顾问消息和视觉移动体数量，方便自动化测试和调试。
 
 ## GitHub
 
@@ -306,21 +355,19 @@ main
 - 只做桌面 16:9 优先布局，不做移动端适配。
 - 当前是休闲化经营原型，不是完整大型城市模拟器。
 - 地图固定为 18 x 18，暂不支持随机地图、扩展地图或地形编辑。
-- 没有存档/读档系统，刷新页面会回到初始小镇。
-- 建筑、车辆、居民、道路和粒子都由 Three.js 基础几何体生成，没有外部美术资源。
+- 当前 PNG 贴图为可复现占位资产，最终 AI 辅助或手工美术替换仍留到 P5 前资源制作。
+- 建筑、车辆、居民、道路和粒子仍主要由 Three.js 基础几何体生成，建筑表面已优先加载项目内 PNG 像素贴图并保留 canvas 回退；暂未引入 GLTF 模型。
 - 居民是模拟层独立对象，但屏幕上只抽样显示最多 60 个移动体以控制性能。
 
 ## 后续路线
 
 建议优先级：
 
-1. 加入 `localStorage` 存档 / 读档。
-2. 增加建筑升级系统，例如住宅升级为公寓、商业升级为商店街。
-3. 增加道路升级操作，把已有普通道路直接升级为樱花大道。
-4. 增加更细的分区需求、满意度原因拆分和周报图表。
-5. 加入更多日系小镇装饰，如便利店、车站、神社、小河、桥、风铃摊。
-6. 增加目标章节，例如“新居民入住”“商店街复兴”“春日祭典”。
-7. 加入音效开关和背景音乐。
+1. 完成 P5 QA：新游戏、继续游戏、坏存档、章节通关、极端城市和低性能设备。
+2. 替换当前占位 PNG 为最终 AI 辅助或手工像素贴图，并保留资源清单路径稳定。
+3. 完成玩家说明、游戏内帮助页、版本号、更新日志和已知问题文档。
+4. 做满图/满居民性能基线，必要时优化移动体、材质和 UI 渲染。
+5. 评估离线发布包；默认保持桌面浏览器本地运行，后续再考虑 Electron/Tauri。
 
 ## License
 

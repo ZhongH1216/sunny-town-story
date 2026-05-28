@@ -1,4 +1,5 @@
 import * as THREE from "../node_modules/three/build/three.module.js";
+import { ASSET_MANIFEST, assetManifestSummary } from "./asset-manifest.js";
 
 const GRID_SIZE = 18;
 const TILE_SIZE = 2.4;
@@ -9,6 +10,9 @@ const SAVE_VERSION = 2;
 const SAVE_KEY = "sunny-town-story.save.v1";
 const AUTO_SAVE_INTERVAL_WEEKS = 4;
 const MAX_BUILDING_LEVEL = 3;
+const CAMERA_LIMIT = GRID_SIZE * TILE_SIZE * 0.42;
+const CAMERA_MIN_ZOOM = 0.62;
+const CAMERA_MAX_ZOOM = 1.45;
 const query = new URLSearchParams(window.location.search);
 const TEST_MODE = query.has("test");
 
@@ -33,25 +37,6 @@ const GAME_BALANCE = {
     service: [1, 1.22, 1.45],
     supply: [1, 1.4, 1.9],
     pollution: [1, 1.15, 1.35],
-  },
-};
-
-const ASSET_MANIFEST = {
-  style: "warm-pixel-lowpoly",
-  textureSize: 16,
-  generated: "runtime-canvas",
-  textures: {
-    residential: ["#ffb8c9", "#ffe3ec", "#f68eaa", "#fff5d6"],
-    commercial: ["#ffd36f", "#fff1a6", "#ffb85f", "#ffffff"],
-    industrial: ["#9fc0cf", "#d4e5ec", "#7899a7", "#f2f6f7"],
-    park: ["#8ddf91", "#bff0a9", "#62b96c", "#ffd0dd"],
-    school: ["#ffc36e", "#ffe0a6", "#f09b50", "#ffffff"],
-    fire: ["#ff8b7f", "#ffd0ca", "#e65f5d", "#ffffff"],
-    power: ["#ffe47a", "#fff3b8", "#f1b84b", "#ffffff"],
-    water: ["#84c9ff", "#d5f2ff", "#5aaee7", "#ffffff"],
-    plaza: ["#f6d58b", "#fff0bf", "#8bcf9a", "#ffffff"],
-    station: ["#b9d8f2", "#fff4c0", "#5d8ca8", "#ffffff"],
-    lantern: ["#ffb1a6", "#ffe0ba", "#e95f64", "#ffffff"],
   },
 };
 
@@ -509,6 +494,62 @@ function eventImpact() {
   );
 }
 
+function ensureAudio() {
+  if (city.settings.muted || city.settings.volume <= 0) return null;
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) return null;
+  if (!audioContext) audioContext = new AudioCtor();
+  if (audioContext.state === "suspended") audioContext.resume();
+  return audioContext;
+}
+
+function playTone({ frequency = 440, duration = 0.12, type = "sine", gain = 0.18, slide = 0 }) {
+  if (TEST_MODE) return;
+  const context = ensureAudio();
+  if (!context) return;
+  const oscillator = context.createOscillator();
+  const envelope = context.createGain();
+  const now = context.currentTime;
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, now);
+  if (slide) oscillator.frequency.exponentialRampToValueAtTime(Math.max(60, frequency + slide), now + duration);
+  envelope.gain.setValueAtTime(0.0001, now);
+  envelope.gain.exponentialRampToValueAtTime(gain * city.settings.volume, now + 0.018);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  oscillator.connect(envelope);
+  envelope.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + duration + 0.03);
+}
+
+function playSound(name) {
+  const cues = ASSET_MANIFEST.audioCues;
+  (cues[name] || cues.ui).forEach((sound, index) => window.setTimeout(() => playTone(sound), index * 70));
+}
+
+function stopMusic() {
+  if (musicTimer) window.clearInterval(musicTimer);
+  musicTimer = null;
+}
+
+function playMusicStep() {
+  if (TEST_MODE || city.settings.muted || !city.settings.music || city.settings.volume <= 0) return;
+  const loop = ASSET_MANIFEST.musicLoop;
+  const note = loop.notes[musicStep % loop.notes.length];
+  const bass = loop.bass[musicStep % loop.bass.length];
+  playTone({ frequency: note, duration: 0.28, type: "triangle", gain: loop.gain });
+  if (musicStep % 2 === 0) playTone({ frequency: bass, duration: 0.34, type: "sine", gain: loop.gain * 0.55 });
+  musicStep += 1;
+}
+
+function syncMusic() {
+  stopMusic();
+  if (TEST_MODE || city.settings.muted || !city.settings.music || city.settings.volume <= 0) return;
+  ensureAudio();
+  playMusicStep();
+  musicTimer = window.setInterval(playMusicStep, ASSET_MANIFEST.musicLoop.tempoMs);
+}
+
 function trend(current, previous) {
   if (!Number.isFinite(previous)) return { delta: 0, label: "→0" };
   const delta = Math.round(current - previous);
@@ -614,6 +655,15 @@ const els = {
   upgradeButton: document.querySelector("#upgradeButton"),
   pauseButton: document.querySelector("#pauseButton"),
   speedButton: document.querySelector("#speedButton"),
+  undoButton: document.querySelector("#undoButton"),
+  zoomOutButton: document.querySelector("#zoomOutButton"),
+  zoomInButton: document.querySelector("#zoomInButton"),
+  centerCameraButton: document.querySelector("#centerCameraButton"),
+  muteButton: document.querySelector("#muteButton"),
+  musicButton: document.querySelector("#musicButton"),
+  volumeSlider: document.querySelector("#volumeSlider"),
+  shortcutHelpButton: document.querySelector("#shortcutHelpButton"),
+  shortcutHint: document.querySelector("#shortcutHint"),
   calendar: document.querySelector("#calendar"),
   currentTool: document.querySelector("#currentTool"),
   hintText: document.querySelector("#hintText"),
@@ -667,6 +717,13 @@ const city = {
   history: [],
   manualSaveCount: 0,
   upgradeCount: 0,
+  undoStack: [],
+  settings: {
+    muted: false,
+    volume: 0.45,
+    music: true,
+    shortcutHelp: false,
+  },
   lastAutoSaveWeek: 0,
   lastSaveAt: null,
   saveStatus: "尚未保存",
@@ -731,6 +788,9 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const drag = { active: false, moved: false, x: 0, y: 0 };
 const cameraTarget = new THREE.Vector3(0, 0, 0);
+let audioContext = null;
+let musicTimer = null;
+let musicStep = 0;
 
 const sun = new THREE.DirectionalLight(0xfff2c2, 3.2);
 sun.position.set(-20, 42, 18);
@@ -756,9 +816,19 @@ const roadMaterials = {
   avenue: new THREE.MeshStandardMaterial({ color: ROAD_TIERS.avenue.color, roughness: 0.78 }),
 };
 const pixelTextures = {};
+const textureLoader = new THREE.TextureLoader();
+const assetRuntime = {
+  textureMode: ASSET_MANIFEST.textureMode,
+  loadedTextures: 0,
+  failedTextures: 0,
+  fallbackTextures: 0,
+};
 const congestionMaterial = new THREE.MeshBasicMaterial({ color: 0xff8e72, transparent: true, opacity: 0.34 });
 const hoverMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
 const invalidMaterial = new THREE.MeshBasicMaterial({ color: 0xff7b7b, transparent: true, opacity: 0.42 });
+const constructionMaterial = new THREE.MeshStandardMaterial({ color: 0xffd36f, roughness: 0.55, emissive: 0x8c4b12, emissiveIntensity: 0.06 });
+const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd36f, roughness: 0.38, metalness: 0.12, emissive: 0x8b5b00, emissiveIntensity: 0.08 });
+const heartMaterial = new THREE.MeshStandardMaterial({ color: 0xff8cad, roughness: 0.52, emissive: 0x7d2442, emissiveIntensity: 0.1 });
 
 const hoverMesh = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE, 0.16, TILE_SIZE), hoverMaterial);
 hoverMesh.position.y = 0.12;
@@ -953,9 +1023,16 @@ function createRoof(width, depth, color) {
   return roof;
 }
 
-function makePixelTexture(type) {
-  if (pixelTextures[type]) return pixelTextures[type];
-  const palette = ASSET_MANIFEST.textures[type] || ["#ffffff", "#e5e5e5", "#cccccc", "#999999"];
+function configurePixelTexture(texture) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function makeFallbackTexture(type) {
+  const palette = ASSET_MANIFEST.textures[type]?.palette || ["#ffffff", "#e5e5e5", "#cccccc", "#999999"];
   const canvas = document.createElement("canvas");
   canvas.width = ASSET_MANIFEST.textureSize;
   canvas.height = ASSET_MANIFEST.textureSize;
@@ -972,12 +1049,32 @@ function makePixelTexture(type) {
   }
   ctx.fillStyle = palette[3] || "#ffffff";
   for (let x = 2; x < canvas.width; x += 6) ctx.fillRect(x, 5, 2, 3);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  pixelTextures[type] = texture;
-  return texture;
+  assetRuntime.fallbackTextures += 1;
+  return configurePixelTexture(new THREE.CanvasTexture(canvas));
+}
+
+function preloadManifestTextures() {
+  Object.entries(ASSET_MANIFEST.textures).forEach(([type, asset]) => {
+    if (!asset.path) return;
+    const texture = textureLoader.load(
+      asset.path,
+      () => {
+        assetRuntime.loadedTextures += 1;
+      },
+      undefined,
+      () => {
+        assetRuntime.failedTextures += 1;
+        pixelTextures[type] = makeFallbackTexture(type);
+      },
+    );
+    pixelTextures[type] = configurePixelTexture(texture);
+  });
+}
+
+function makePixelTexture(type) {
+  if (pixelTextures[type]) return pixelTextures[type];
+  pixelTextures[type] = makeFallbackTexture(type);
+  return pixelTextures[type];
 }
 
 function buildingMaterial(type, color) {
@@ -1160,6 +1257,7 @@ function applyChapterBonus(chapterIndex, chapter) {
   if (bonus.upgradeDiscount) city.modifiers.upgradeDiscount = Math.max(city.modifiers.upgradeDiscount, bonus.upgradeDiscount);
   if (bonus.trafficBonus) city.modifiers.trafficBonus += bonus.trafficBonus;
   addMessage(`${chapter.title}奖励：${bonus.text || chapter.reward}`);
+  playSound("chapter");
 }
 
 function updateAchievements() {
@@ -1235,6 +1333,7 @@ function serializeGame() {
       history: city.history.map((item) => ({ ...item })),
       manualSaveCount: city.manualSaveCount,
       upgradeCount: city.upgradeCount,
+      settings: { ...city.settings },
       completed: city.completed,
       messages: [...city.messages],
     },
@@ -1247,6 +1346,21 @@ function migrateSave(rawSave) {
   if (rawSave.version === 1 && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
   if (!rawSave.version && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
   return null;
+}
+
+function captureUndoState(label) {
+  return {
+    label,
+    save: serializeGame(),
+    selectedTool: city.selectedTool,
+    selectedRoadTier: city.selectedRoadTier,
+    selectedTile: city.selectedTile ? { x: city.selectedTile.x, z: city.selectedTile.z } : null,
+  };
+}
+
+function pushUndo(label) {
+  city.undoStack.push(captureUndoState(label));
+  city.undoStack = city.undoStack.slice(-12);
 }
 
 function clearCityContent() {
@@ -1299,6 +1413,13 @@ function applySave(save) {
   city.history = Array.isArray(data.history) ? data.history.slice(-24).map((item) => ({ ...item })) : [];
   city.manualSaveCount = data.manualSaveCount || 0;
   city.upgradeCount = data.upgradeCount || 0;
+  city.undoStack = [];
+  city.settings = {
+    muted: Boolean(data.settings?.muted),
+    volume: clamp(Number.isFinite(data.settings?.volume) ? data.settings.volume : city.settings.volume, 0, 1),
+    music: data.settings?.music !== false,
+    shortcutHelp: Boolean(data.settings?.shortcutHelp),
+  };
   city.completed = Boolean(data.completed);
   city.messages = Array.isArray(data.messages) && data.messages.length ? [...data.messages].slice(0, 4) : ["存档已读取，欢迎回到晴日港。"];
 
@@ -1342,6 +1463,7 @@ function applySave(save) {
   updateAchievements();
   city.saveStatus = `已读取 ${new Date(migrated.savedAt || Date.now()).toLocaleString()}`;
   city.lastSaveAt = migrated.savedAt || null;
+  city.selectedTile = null;
   return true;
 }
 
@@ -1379,6 +1501,75 @@ function loadGameFromStorage() {
   }
 }
 
+function updateSettings(partial) {
+  city.settings = { ...city.settings, ...partial };
+  city.settings.volume = clamp(city.settings.volume, 0, 1);
+  if (city.settings.volume <= 0) city.settings.muted = true;
+  syncMusic();
+  renderUI();
+}
+
+function togglePause() {
+  city.paused = !city.paused;
+  playSound("ui");
+  renderUI();
+}
+
+function cycleSpeed() {
+  city.speed = city.speed === 1 ? 2 : city.speed === 2 ? 4 : 1;
+  playSound("ui");
+  renderUI();
+}
+
+function clampCameraTarget() {
+  cameraTarget.x = clamp(cameraTarget.x, -CAMERA_LIMIT, CAMERA_LIMIT);
+  cameraTarget.z = clamp(cameraTarget.z, -CAMERA_LIMIT, CAMERA_LIMIT);
+}
+
+function setCameraZoom(value) {
+  camera.zoom = clamp(value, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
+  camera.updateProjectionMatrix();
+}
+
+function zoomCamera(direction) {
+  setCameraZoom(camera.zoom + direction * 0.12);
+  playSound("ui");
+  renderUI();
+}
+
+function centerCamera() {
+  cameraTarget.set(0, 0, 0);
+  setCameraZoom(1);
+  playSound("ui");
+  renderUI();
+}
+
+function undoLastAction() {
+  const entry = city.undoStack.pop();
+  const remaining = [...city.undoStack];
+  if (!entry) {
+    addMessage("没有可以撤销的建造操作。");
+    playSound("warning");
+    renderUI();
+    return false;
+  }
+  if (!applySave(entry.save)) {
+    addMessage("撤销失败，当前状态已保持。");
+    playSound("warning");
+    renderUI();
+    return false;
+  }
+  city.undoStack = remaining;
+  city.selectedTool = entry.selectedTool;
+  city.selectedRoadTier = entry.selectedRoadTier;
+  city.selectedTile = entry.selectedTile ? getTile(entry.selectedTile.x, entry.selectedTile.z) : null;
+  computeStats();
+  addMessage(`已撤销：${entry.label}。`);
+  playSound("ui");
+  renderUI();
+  return true;
+}
+
 function resetMetaState() {
   city.selectedTool = "road";
   city.selectedRoadTier = "lane";
@@ -1401,6 +1592,7 @@ function resetMetaState() {
   city.history = [];
   city.manualSaveCount = 0;
   city.upgradeCount = 0;
+  city.undoStack = [];
   city.lastAutoSaveWeek = 0;
   city.lastSaveAt = null;
   city.saveStatus = "新游戏";
@@ -1468,6 +1660,64 @@ function spawnBubble(text, x, z, color = 0xffb85f) {
   effectGroup.add(sprite);
 }
 
+function spawnRing(x, z, color = 0xffd36f, radius = 1.45) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(radius, 0.035, 8, 36),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72 }),
+  );
+  const worldPos = gridToWorld(x, z);
+  ring.position.set(worldPos.x, 0.28, worldPos.z);
+  ring.rotation.x = Math.PI / 2;
+  ring.userData = { age: 0, kind: "ring", duration: 1.1, baseScale: 0.35 };
+  ring.scale.setScalar(0.35);
+  effectGroup.add(ring);
+}
+
+function spawnConstructionEffect(x, z) {
+  const worldPos = gridToWorld(x, z);
+  for (let i = 0; i < 4; i += 1) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.82, 0.12), constructionMaterial.clone());
+    beam.position.set(worldPos.x + (i % 2 ? 0.58 : -0.58), 0.48, worldPos.z + (i < 2 ? 0.52 : -0.52));
+    beam.rotation.y = i * Math.PI * 0.18;
+    beam.userData = { age: 0, kind: "construction", duration: 1.15, drift: 0.1 + i * 0.03 };
+    effectGroup.add(beam);
+  }
+  spawnRing(x, z, 0xffd36f, 1.25);
+}
+
+function spawnUpgradeEffect(x, z) {
+  spawnRing(x, z, 0xffb85f, 1.55);
+  spawnRing(x, z, 0xfff2a8, 0.96);
+  spawnBubble("UP", x, z, 0xffb85f);
+}
+
+function spawnParticleBurst(label, x, z, material, count = 8) {
+  const worldPos = gridToWorld(x, z);
+  for (let i = 0; i < count; i += 1) {
+    const particle = new THREE.Mesh(new THREE.SphereGeometry(0.08 + (i % 3) * 0.018, 8, 6), material.clone());
+    const angle = (Math.PI * 2 * i) / count;
+    particle.position.set(worldPos.x, 0.9 + (i % 4) * 0.08, worldPos.z);
+    particle.userData = {
+      age: 0,
+      kind: "particle",
+      label,
+      duration: 1.05,
+      velocity: new THREE.Vector3(Math.cos(angle) * 0.72, 0.88 + (i % 3) * 0.16, Math.sin(angle) * 0.72),
+    };
+    effectGroup.add(particle);
+  }
+}
+
+function spawnIncomeEffect(amount) {
+  if (amount <= 0) return;
+  spawnParticleBurst("tax", 9, 9, coinMaterial, 10);
+}
+
+function spawnPopulationEffect(delta) {
+  if (delta <= 0) return;
+  spawnParticleBurst("population", 8, 8, heartMaterial, Math.min(12, 5 + Math.ceil(delta / 12)));
+}
+
 function spawnChapterCelebration(title) {
   spawnBubble("章节完成", 9, 9, 0xffb85f);
   spawnBubble(title.includes("：") ? title.split("：").pop() : title, 8, 10, 0x5aa27d);
@@ -1496,6 +1746,7 @@ function place(type, x, z, options = {}) {
   }
 
   if (type === "bulldoze") {
+    pushUndo(tile.buildingId ? "拆除建筑" : "拆除道路");
     bulldoze(tile);
     renderUI();
     return true;
@@ -1504,28 +1755,35 @@ function place(type, x, z, options = {}) {
   if (type === "road") {
     const tier = options.tier || city.selectedRoadTier;
     if (tile.road && tile.roadTier === "lane" && tier === "avenue") {
+      pushUndo("升级道路");
       const upgradePrice = ROAD_TIERS.avenue.cost - Math.round(ROAD_TIERS.lane.cost * 0.25);
       city.stats.money -= upgradePrice;
       tile.roadTier = "avenue";
       invalidateRoadNetwork();
       spawnBubble("道路升级", x, z, 0xffb85f);
+      spawnUpgradeEffect(x, z);
       addMessage("普通道路升级为樱花大道，容量和幸福加成提升。");
+      playSound("road");
       maybeCompleteChapter();
       renderUI();
       return true;
     }
+    pushUndo(`铺设${ROAD_TIERS[tier].name}`);
     city.stats.money -= ROAD_TIERS[tier].cost;
     tile.road = true;
-    tile.roadTier = tier;
-    tile.type = "road";
-    invalidateRoadNetwork();
-    addMessage(`${ROAD_TIERS[tier].name}铺好了，居民有了新的通勤路线。`);
+  tile.roadTier = tier;
+  tile.type = "road";
+  invalidateRoadNetwork();
+  spawnConstructionEffect(x, z);
+  addMessage(`${ROAD_TIERS[tier].name}铺好了，居民有了新的通勤路线。`);
+    playSound("road");
     maybeCompleteChapter();
     renderUI();
     return true;
   }
 
   const config = BUILDINGS[type];
+  pushUndo(`建造${config.name}`);
   city.stats.money -= config.cost;
   const mesh = createBuildingMesh(type);
   const { x: wx, z: wz } = gridToWorld(x, z);
@@ -1549,7 +1807,9 @@ function place(type, x, z, options = {}) {
   city.buildings.push(building);
   buildingGroup.add(mesh);
   spawnBubble(`+${config.name}`, x, z, 0x5aa27d);
+  spawnConstructionEffect(x, z);
   addMessage(`${config.name}建好了。居民会根据道路可达性决定是否使用它。`);
+  playSound("build");
   maybeCompleteChapter();
   updateAchievements();
   renderUI();
@@ -1567,6 +1827,7 @@ function bulldoze(tile) {
       city.residents = city.residents.filter((resident) => resident.homeId !== building.id && resident.destinationId !== building.id);
       spawnBubble("拆除", tile.x, tile.z, 0xee6b6e);
       addMessage(`${config.name}已拆除，回收了一部分资金。`);
+      playSound("demolish");
     }
   } else if (tile.road) {
     city.stats.money += Math.round(ROAD_TIERS[tile.roadTier].cost * 0.25);
@@ -1579,6 +1840,7 @@ function bulldoze(tile) {
     invalidateRoadNetwork();
     spawnBubble("道路拆除", tile.x, tile.z, 0xee6b6e);
     addMessage("道路已拆除，通勤路线会重新计算。");
+    playSound("demolish");
   }
   tile.buildingId = null;
   tile.type = "grass";
@@ -1597,12 +1859,15 @@ function upgradeSelectedBuilding() {
     renderUI();
     return false;
   }
+  pushUndo(`升级${BUILDINGS[building.type].name}`);
   city.stats.money -= state.cost;
   building.level = buildingLevel(building) + 1;
   city.upgradeCount += 1;
   setBuildingLevelVisual(building);
   spawnBubble(`Lv.${building.level}`, building.x, building.z, 0xffb85f);
+  spawnUpgradeEffect(building.x, building.z);
   addMessage(`${BUILDINGS[building.type].name}升级到 ${building.level} 级，容量、产出或服务能力提升。`);
+  playSound("upgrade");
   computeStats();
   maybeCompleteChapter();
   updateAchievements();
@@ -1994,8 +2259,15 @@ function advanceWeek(count = 1) {
     city.history = city.history.slice(-24);
     city.week += 1;
     city.bankruptWeeks = city.stats.money < -10000 ? city.bankruptWeeks + 1 : 0;
-    if (city.stats.money > previousMoney) spawnBubble(`+${money(city.stats.money - previousMoney)}`, 9, 9, 0xffb85f);
-    if (city.stats.population > previousPopulation) spawnBubble(`+${city.stats.population - previousPopulation} 人`, 8, 8, 0x5aa27d);
+    if (city.stats.money > previousMoney) {
+      spawnBubble(`+${money(city.stats.money - previousMoney)}`, 9, 9, 0xffb85f);
+      spawnIncomeEffect(city.stats.money - previousMoney);
+    }
+    if (city.stats.population > previousPopulation) {
+      spawnBubble(`+${city.stats.population - previousPopulation} 人`, 8, 8, 0x5aa27d);
+      spawnPopulationEffect(city.stats.population - previousPopulation);
+    }
+    playSound(city.bankruptWeeks >= 3 || city.stats.fiscal?.score < 45 ? "warning" : "report");
 
     if (city.bankruptWeeks >= 6) {
       addMessage("财政连续赤字太久，小镇进入托管状态。拆除高维护设施或等待税收恢复。");
@@ -2112,6 +2384,19 @@ function renderUI() {
         : `${BUILDINGS[city.selectedTool].name} ${money(BUILDINGS[city.selectedTool].cost)}`;
   els.pauseButton.textContent = city.paused ? "继续" : "暂停";
   els.speedButton.textContent = `速度 x${city.speed}`;
+  els.undoButton.disabled = city.undoStack.length === 0;
+  els.undoButton.title = city.undoStack.length ? `撤销：${city.undoStack.at(-1).label}` : "没有可以撤销的建造操作";
+  els.zoomOutButton.disabled = camera.zoom <= CAMERA_MIN_ZOOM + 0.01;
+  els.zoomInButton.disabled = camera.zoom >= CAMERA_MAX_ZOOM - 0.01;
+  els.muteButton.textContent = city.settings.muted ? "×" : "♪";
+  els.muteButton.classList.toggle("is-muted", city.settings.muted);
+  els.muteButton.title = city.settings.muted ? "恢复声音" : "静音";
+  els.musicButton.classList.toggle("active", city.settings.music && !city.settings.muted);
+  els.musicButton.classList.toggle("is-muted", !city.settings.music || city.settings.muted);
+  els.musicButton.title = city.settings.music ? "关闭背景音乐" : "开启背景音乐";
+  els.volumeSlider.value = `${Math.round(city.settings.volume * 100)}`;
+  els.shortcutHint.classList.toggle("is-open", city.settings.shortcutHelp);
+  els.shortcutHelpButton.classList.toggle("active", city.settings.shortcutHelp);
 
   els.roadTierButtons.forEach((button) => button.classList.toggle("active", button.dataset.roadTier === city.selectedRoadTier));
   els.toolButtons.forEach((button) => {
@@ -2188,7 +2473,14 @@ function updateHover() {
 }
 
 function setTool(tool) {
+  if (!isToolUnlocked(tool)) {
+    addMessage(unlockState(tool).label);
+    playSound("warning");
+    renderUI();
+    return;
+  }
   city.selectedTool = tool;
+  playSound("ui");
   renderUI();
   updateHover();
 }
@@ -2196,6 +2488,7 @@ function setTool(tool) {
 function setRoadTier(tier) {
   city.selectedRoadTier = tier;
   city.selectedTool = "road";
+  playSound("ui");
   renderUI();
   updateHover();
 }
@@ -2265,9 +2558,28 @@ function updateEffects(delta) {
   for (let i = effectGroup.children.length - 1; i >= 0; i -= 1) {
     const item = effectGroup.children[i];
     item.userData.age += delta;
-    item.position.y += delta * 0.9;
-    item.material.opacity = Math.max(0, 1 - item.userData.age * 0.8);
-    if (item.userData.age > 1.3) effectGroup.remove(item);
+    const duration = item.userData.duration || 1.3;
+    const progress = clamp(item.userData.age / duration, 0, 1);
+    if (item.userData.kind === "ring") {
+      item.scale.setScalar((item.userData.baseScale || 0.4) + progress * 1.1);
+      item.material.opacity = 0.72 * (1 - progress);
+    } else if (item.userData.kind === "construction") {
+      item.position.y += delta * (item.userData.drift || 0.1);
+      item.rotation.y += delta * 2.2;
+      item.scale.y = Math.max(0.08, 1 - progress * 0.72);
+      item.material.opacity = 1 - progress;
+      item.material.transparent = true;
+    } else if (item.userData.kind === "particle") {
+      item.position.addScaledVector(item.userData.velocity, delta);
+      item.userData.velocity.y -= delta * 1.4;
+      item.rotation.y += delta * 4;
+      item.material.opacity = 1 - progress;
+      item.material.transparent = true;
+    } else {
+      item.position.y += delta * 0.9;
+      item.material.opacity = Math.max(0, 1 - item.userData.age * 0.8);
+    }
+    if (item.userData.age > duration) effectGroup.remove(item);
   }
 }
 
@@ -2310,6 +2622,7 @@ canvas.addEventListener("pointermove", (event) => {
   if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
   cameraTarget.x -= dx * 0.035;
   cameraTarget.z -= dy * 0.035;
+  clampCameraTarget();
   drag.x = event.clientX;
   drag.y = event.clientY;
 });
@@ -2326,21 +2639,34 @@ canvas.addEventListener(
   (event) => {
     event.preventDefault();
     const zoom = event.deltaY > 0 ? 1.08 : 0.92;
-    camera.zoom = clamp(camera.zoom / zoom, 0.62, 1.45);
-    camera.updateProjectionMatrix();
+    setCameraZoom(camera.zoom / zoom);
+    renderUI();
   },
   { passive: false },
 );
 
 els.toolButtons.forEach((button) => button.addEventListener("click", () => setTool(button.dataset.tool)));
 els.roadTierButtons.forEach((button) => button.addEventListener("click", () => setRoadTier(button.dataset.roadTier)));
-els.pauseButton.addEventListener("click", () => {
-  city.paused = !city.paused;
-  renderUI();
+els.pauseButton.addEventListener("click", togglePause);
+els.speedButton.addEventListener("click", cycleSpeed);
+els.undoButton.addEventListener("click", undoLastAction);
+els.zoomOutButton.addEventListener("click", () => zoomCamera(-1));
+els.zoomInButton.addEventListener("click", () => zoomCamera(1));
+els.centerCameraButton.addEventListener("click", centerCamera);
+els.muteButton.addEventListener("click", () => {
+  updateSettings({ muted: !city.settings.muted });
+  playSound("ui");
 });
-els.speedButton.addEventListener("click", () => {
-  city.speed = city.speed === 1 ? 2 : city.speed === 2 ? 4 : 1;
-  renderUI();
+els.musicButton.addEventListener("click", () => {
+  updateSettings({ music: !city.settings.music, muted: false });
+  playSound("ui");
+});
+els.volumeSlider.addEventListener("input", () => {
+  updateSettings({ volume: Number(els.volumeSlider.value) / 100, muted: Number(els.volumeSlider.value) <= 0 });
+});
+els.shortcutHelpButton.addEventListener("click", () => {
+  updateSettings({ shortcutHelp: !city.settings.shortcutHelp });
+  playSound("ui");
 });
 els.saveButton.addEventListener("click", () => saveGame(true));
 els.newGameButton.addEventListener("click", () => {
@@ -2355,6 +2681,76 @@ els.resetButton.addEventListener("click", () => {
   renderUI();
 });
 els.upgradeButton.addEventListener("click", () => upgradeSelectedBuilding());
+
+window.addEventListener("keydown", (event) => {
+  if (
+    event.target instanceof HTMLInputElement ||
+    event.target instanceof HTMLTextAreaElement ||
+    event.target instanceof HTMLSelectElement
+  ) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  const toolKeys = {
+    "1": "road",
+    "2": "residential",
+    "3": "commercial",
+    "4": "industrial",
+    "5": "park",
+    "6": "school",
+    "7": "fire",
+    "8": "power",
+    "9": "water",
+    b: "bulldoze",
+  };
+  if (toolKeys[key]) {
+    event.preventDefault();
+    setTool(toolKeys[key]);
+    return;
+  }
+  if (key === "a") {
+    event.preventDefault();
+    setRoadTier(city.selectedRoadTier === "lane" ? "avenue" : "lane");
+    return;
+  }
+  if (key === " ") {
+    event.preventDefault();
+    togglePause();
+    return;
+  }
+  if (key === "v") {
+    event.preventDefault();
+    cycleSpeed();
+    return;
+  }
+  if (key === "+" || key === "=") {
+    event.preventDefault();
+    zoomCamera(1);
+    return;
+  }
+  if (key === "-" || key === "_") {
+    event.preventDefault();
+    zoomCamera(-1);
+    return;
+  }
+  if (key === "c") {
+    event.preventDefault();
+    centerCamera();
+    return;
+  }
+  if (key === "u" || (event.ctrlKey && key === "z")) {
+    event.preventDefault();
+    undoLastAction();
+    return;
+  }
+  if (key === "escape") {
+    event.preventDefault();
+    city.selectedTile = null;
+    city.selectedTool = "road";
+    playSound("ui");
+    renderUI();
+  }
+});
 
 function resize() {
   const width = window.innerWidth;
@@ -2408,11 +2804,13 @@ function animateScene(elapsed, delta) {
 
 function seedTown() {
   clearCityContent();
+  city.undoStack = [];
   for (let x = 5; x <= 12; x += 1) place("road", x, 9, { tier: x >= 7 && x <= 10 ? "avenue" : "lane" });
   place("road", 8, 8);
   place("road", 8, 10);
   place("residential", 7, 8);
   place("commercial", 9, 8);
+  city.undoStack = [];
   city.stats.money = INITIAL_MONEY - ROAD_TIERS.lane.cost * 6 - ROAD_TIERS.avenue.cost * 4 - 900 - 1300;
   computeStats();
   refreshVisualAgents();
@@ -2420,10 +2818,12 @@ function seedTown() {
 }
 
 function bootGame() {
+  preloadManifestTextures();
   createPetals();
   createTiles();
   const loaded = !TEST_MODE && loadGameFromStorage();
   if (!loaded) startNewGame({ keepStorage: TEST_MODE });
+  syncMusic();
   renderUI();
   exposeTestApi();
 }
@@ -2460,6 +2860,21 @@ function exposeTestApi() {
       tutorialAll: TUTORIAL_TASKS.map((task) => ({ id: task.id, title: task.title, text: task.text, done: task.check() })),
       selectedTool: city.selectedTool,
       selectedRoadTier: city.selectedRoadTier,
+      settings: { ...city.settings },
+      assetManifest: assetManifestSummary(),
+      assetRuntime: {
+        ...assetRuntime,
+        cachedTextures: Object.keys(pixelTextures).length,
+      },
+      effectCount: effectGroup.children.length,
+      musicEnabled: Boolean(city.settings.music && !city.settings.muted),
+      undoDepth: city.undoStack.length,
+      undoLabel: city.undoStack.at(-1)?.label || null,
+      camera: {
+        zoom: camera.zoom,
+        target: { x: cameraTarget.x, z: cameraTarget.z },
+        limit: CAMERA_LIMIT,
+      },
       roadVersion: city.roadVersion,
       buildingCount: city.buildings.length,
       landmarkCount: countLandmarks(),
@@ -2493,6 +2908,10 @@ function exposeTestApi() {
       city.stats.money = amount;
       renderUI();
     },
+    setSettings: (settings) => {
+      updateSettings(settings);
+    },
+    undo: undoLastAction,
   };
 }
 
