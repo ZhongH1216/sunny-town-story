@@ -6,6 +6,7 @@ const TILE_SIZE = 2.4;
 const WEEK_SECONDS = 4;
 const INITIAL_MONEY = 50000;
 const MAX_VISUAL_AGENTS = 60;
+const GAME_VERSION = "1.0.0-rc.1";
 const SAVE_VERSION = 2;
 const SAVE_KEY = "sunny-town-story.save.v1";
 const AUTO_SAVE_INTERVAL_WEEKS = 4;
@@ -652,6 +653,7 @@ const els = {
   saveButton: document.querySelector("#saveButton"),
   newGameButton: document.querySelector("#newGameButton"),
   resetButton: document.querySelector("#resetButton"),
+  versionLabel: document.querySelector("#versionLabel"),
   upgradeButton: document.querySelector("#upgradeButton"),
   pauseButton: document.querySelector("#pauseButton"),
   speedButton: document.querySelector("#speedButton"),
@@ -664,6 +666,10 @@ const els = {
   volumeSlider: document.querySelector("#volumeSlider"),
   shortcutHelpButton: document.querySelector("#shortcutHelpButton"),
   shortcutHint: document.querySelector("#shortcutHint"),
+  helpButton: document.querySelector("#helpButton"),
+  helpOverlay: document.querySelector("#helpOverlay"),
+  helpCloseButton: document.querySelector("#helpCloseButton"),
+  helpVersion: document.querySelector("#helpVersion"),
   calendar: document.querySelector("#calendar"),
   currentTool: document.querySelector("#currentTool"),
   hintText: document.querySelector("#hintText"),
@@ -723,6 +729,7 @@ const city = {
     volume: 0.45,
     music: true,
     shortcutHelp: false,
+    helpOpen: false,
   },
   lastAutoSaveWeek: 0,
   lastSaveAt: null,
@@ -1419,6 +1426,7 @@ function applySave(save) {
     volume: clamp(Number.isFinite(data.settings?.volume) ? data.settings.volume : city.settings.volume, 0, 1),
     music: data.settings?.music !== false,
     shortcutHelp: Boolean(data.settings?.shortcutHelp),
+    helpOpen: Boolean(data.settings?.helpOpen),
   };
   city.completed = Boolean(data.completed);
   city.messages = Array.isArray(data.messages) && data.messages.length ? [...data.messages].slice(0, 4) : ["存档已读取，欢迎回到晴日港。"];
@@ -1493,11 +1501,16 @@ function loadGameFromStorage() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return false;
-    return applySave(JSON.parse(raw));
+    const loaded = applySave(JSON.parse(raw));
+    if (!loaded) throw new Error("Save migration failed");
+    return true;
   } catch (error) {
-    city.saveStatus = "存档损坏，已开启新游戏";
     localStorage.removeItem(SAVE_KEY);
-    return false;
+    startNewGame({ keepStorage: true });
+    city.saveStatus = "存档损坏，已开启新游戏";
+    addMessage("检测到本地存档损坏，已自动移除并开启新游戏。");
+    renderUI();
+    return true;
   }
 }
 
@@ -2337,6 +2350,8 @@ function renderUI() {
   const stats = city.stats;
   const chapter = currentChapter();
   els.money.textContent = money(stats.money);
+  if (els.versionLabel) els.versionLabel.textContent = GAME_VERSION;
+  if (els.helpVersion) els.helpVersion.textContent = GAME_VERSION;
   els.population.textContent = `${Math.round(stats.population)} / ${stats.capacity}`;
   els.happiness.textContent = `${Math.round(stats.happiness)}%`;
   els.employment.textContent = `${Math.round(stats.employmentRate)}%`;
@@ -2397,6 +2412,9 @@ function renderUI() {
   els.volumeSlider.value = `${Math.round(city.settings.volume * 100)}`;
   els.shortcutHint.classList.toggle("is-open", city.settings.shortcutHelp);
   els.shortcutHelpButton.classList.toggle("active", city.settings.shortcutHelp);
+  els.helpButton.classList.toggle("active", city.settings.helpOpen);
+  els.helpOverlay.classList.toggle("is-open", city.settings.helpOpen);
+  els.helpOverlay.setAttribute("aria-hidden", city.settings.helpOpen ? "false" : "true");
 
   els.roadTierButtons.forEach((button) => button.classList.toggle("active", button.dataset.roadTier === city.selectedRoadTier));
   els.toolButtons.forEach((button) => {
@@ -2668,6 +2686,14 @@ els.shortcutHelpButton.addEventListener("click", () => {
   updateSettings({ shortcutHelp: !city.settings.shortcutHelp });
   playSound("ui");
 });
+els.helpButton.addEventListener("click", () => {
+  updateSettings({ helpOpen: !city.settings.helpOpen });
+  playSound("ui");
+});
+els.helpCloseButton.addEventListener("click", () => {
+  updateSettings({ helpOpen: false });
+  playSound("ui");
+});
 els.saveButton.addEventListener("click", () => saveGame(true));
 els.newGameButton.addEventListener("click", () => {
   if (!window.confirm("开始新游戏会覆盖当前未保存进度，确定继续吗？")) return;
@@ -2745,6 +2771,11 @@ window.addEventListener("keydown", (event) => {
   }
   if (key === "escape") {
     event.preventDefault();
+    if (city.settings.helpOpen) {
+      updateSettings({ helpOpen: false });
+      playSound("ui");
+      return;
+    }
     city.selectedTile = null;
     city.selectedTool = "road";
     playSound("ui");
@@ -2843,7 +2874,10 @@ function exposeTestApi() {
       renderUI();
     },
     findPathByRoads: (a, b) => findPath(getTile(a.x, a.z), getTile(b.x, b.z))?.map((tile) => ({ x: tile.x, z: tile.z })) || null,
+    loadFromStorage: loadGameFromStorage,
     getState: () => ({
+      version: GAME_VERSION,
+      saveVersion: SAVE_VERSION,
       stats: { ...city.stats },
       week: city.week,
       chapterIndex: city.chapterIndex,
@@ -2861,6 +2895,7 @@ function exposeTestApi() {
       selectedTool: city.selectedTool,
       selectedRoadTier: city.selectedRoadTier,
       settings: { ...city.settings },
+      helpOpen: city.settings.helpOpen,
       assetManifest: assetManifestSummary(),
       assetRuntime: {
         ...assetRuntime,
@@ -2908,8 +2943,29 @@ function exposeTestApi() {
       city.stats.money = amount;
       renderUI();
     },
+    setQaMetrics: (metrics = {}) => {
+      if (Number.isFinite(metrics.chapterIndex)) city.chapterIndex = clamp(metrics.chapterIndex, 0, CHAPTERS.length - 1);
+      Object.entries(metrics.stats || {}).forEach(([key, value]) => {
+        if (Number.isFinite(value) && key in city.stats) city.stats[key] = value;
+      });
+      renderUI();
+    },
+    recompute: () => {
+      computeStats();
+      refreshVisualAgents();
+      renderUI();
+    },
     setSettings: (settings) => {
       updateSettings(settings);
+    },
+    setHelpOpen: (open) => {
+      updateSettings({ helpOpen: Boolean(open) });
+    },
+    writeRawSave: (value) => {
+      localStorage.setItem(SAVE_KEY, value);
+    },
+    clearRawSave: () => {
+      localStorage.removeItem(SAVE_KEY);
     },
     undo: undoLastAction,
   };

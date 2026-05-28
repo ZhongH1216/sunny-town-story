@@ -1,12 +1,15 @@
 {
   "name": "sunny-town-story",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "description": "A sunny Japanese-inspired 3D casual town builder.",
   "main": "app.py",
   "scripts": {
     "assets:textures": "tools\\node-shim.cmd tools\\generate-textures.js",
     "check": "tools\\node-shim.cmd tools\\check-env.js",
     "install:browsers": "npx playwright install chromium",
+    "package:local": "tools\\node-shim.cmd tools\\package-local.js",
+    "verify:clean": "tools\\node-shim.cmd tools\\verify-clean-source.js",
+    "verify:package": "tools\\node-shim.cmd tools\\verify-package.js",
     "setup": "scripts\\setup-dev.bat",
     "serve": "tools\\node-shim.cmd tools\\serve.js",
     "start": "tools\\node-shim.cmd tools\\start-server.js",

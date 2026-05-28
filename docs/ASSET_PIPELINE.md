@@ -54,3 +54,9 @@ Avoid: photorealism, gradients, heavy outlines, dark palettes, excessive purple,
 ## P4 Acceptance Notes
 
 The current checked-in PNGs are deterministic placeholders generated from the manifest palettes. They are production-path assets, not final art. Replacing them with AI-assisted or hand-polished textures is now a data-only operation as long as ids and paths stay stable.
+
+## P5 RC Note
+
+P5 targets replacing all 11 manifest textures with final AI-assisted pixel art. If the current execution environment does not expose an image generation tool, do not fake the replacement: keep the existing deterministic PNGs, keep every manifest id/path unchanged, and treat final art as the remaining asset-production blocker.
+
+The final texture prompt sheet for P5 lives in `docs/P5_TEXTURE_PROMPTS.md`.

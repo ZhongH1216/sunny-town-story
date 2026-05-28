@@ -23,6 +23,9 @@ async function assertFrame(page, viewport, name) {
   await expect(page.locator(".advisor-panel")).toBeVisible();
   await expect(page.locator(".bottom-bar")).toBeVisible();
   await expect(page.locator("#scene")).toBeVisible();
+  await page.locator("#helpButton").click();
+  await expect(page.locator("#helpOverlay")).toBeVisible();
+  await expect(page.locator("#helpOverlay")).toContainText("晴日建设手册");
   await expect(await canvasSignal(page)).toBeGreaterThan(1000);
   await page.screenshot({ path: `test-results/visual-${name}.png`, fullPage: true });
 }

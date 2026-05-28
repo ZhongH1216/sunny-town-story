@@ -1,6 +1,6 @@
 # 阳光小镇物语
 
-一个使用 Three.js 制作的桌面 3D 休闲城市经营游戏。当前版本已经推进到 P4 收尾：在道路等级、居民通勤、拥堵反馈和小车/行人动画基础上，加入了存档、章节目标、建筑升级、事件、成就、服务容量、区位策略、音效动效、撤销、镜头控制和第一批像素贴图资产。
+一个使用 Three.js 制作的桌面 3D 休闲城市经营游戏。当前版本进入 `1.0.0-rc.1` 发布候选阶段：在道路等级、居民通勤、拥堵反馈和小车/行人动画基础上，加入了存档、章节目标、建筑升级、事件、成就、服务容量、区位策略、音效动效、撤销、镜头控制、游戏内帮助和第一批像素贴图资产。
 
 项目采用中文界面，视觉方向是蓝天、草地、云朵、樱花、奶油色 HUD 和低多边形玩具感建筑。玩法参考城市建设经营游戏，但节奏更轻松，适合展示和继续迭代。
 
@@ -30,6 +30,7 @@ test-results/sunny-town-desktop.png
 - 建筑落地弹跳、云朵漂移、树冠轻摆、樱花飘落、施工/升级/税收/人口/章节反馈
 - WebAudio 背景音乐和操作音效，支持静音、音量和音乐开关
 - 一步撤销、快捷键、镜头回中、缩放按钮和拖拽边界
+- 右侧游戏内帮助弹层，覆盖开局顺序、道路通勤、水电服务、升级、存档、快捷键和胜利目标
 - `AssetManifest` 管理像素贴图、音频提示和资源路径，PNG 贴图优先加载并保留 canvas 回退
 - 城市顾问实时提示断路、无通勤路径、拥堵、缺水、缺电、就业不足、财政压力和服务缺口
 - Playwright 自动化测试覆盖核心玩法、长局模拟、P4 表现功能和桌面视觉回归
@@ -107,7 +108,11 @@ test-results/sunny-town-desktop.png
 ├─ assets/
 │  └─ textures/            # P4 像素 PNG 贴图资产
 ├─ docs/
-│  └─ ASSET_PIPELINE.md    # 像素贴图和 AI 辅助资源制作流程
+│  ├─ ASSET_PIPELINE.md    # 像素贴图和 AI 辅助资源制作流程
+│  ├─ P5_QA_REPORT.md      # P5 自动化、人工 QA 和新机验证记录
+│  ├─ P5_RC_LOCK.md        # 1.0 RC 锁版策略和发布门槛
+│  ├─ P5_RELEASE_NOTES.md  # 1.0 RC 更新日志、已知问题、QA 清单和商店页草稿
+│  └─ P5_TEXTURE_PROMPTS.md # 11 张最终贴图的生成提示词和路径清单
 ├─ src/
 │  ├─ app.js               # Three.js 场景、城市模拟、道路寻路、交通动画
 │  ├─ asset-manifest.js    # 贴图、音效和资源路径清单
@@ -182,11 +187,14 @@ SUNNY_TOWN_PORT=8765
   "assets:textures": "tools\\node-shim.cmd tools\\generate-textures.js",
   "check": "tools\\node-shim.cmd tools\\check-env.js",
   "install:browsers": "npx playwright install chromium",
+  "package:local": "tools\\node-shim.cmd tools\\package-local.js",
   "setup": "scripts\\setup-dev.bat",
   "serve": "tools\\node-shim.cmd tools\\serve.js",
   "start": "tools\\node-shim.cmd tools\\start-server.js",
   "test": "tools\\node-shim.cmd tools\\run-tests.js",
-  "test:visual": "tools\\node-shim.cmd tools\\run-tests.js tests/visual.spec.js"
+  "test:visual": "tools\\node-shim.cmd tools\\run-tests.js tests/visual.spec.js",
+  "verify:clean": "tools\\node-shim.cmd tools\\verify-clean-source.js",
+  "verify:package": "tools\\node-shim.cmd tools\\verify-package.js"
 }
 ```
 
@@ -252,6 +260,29 @@ npm.cmd start
 
 `npm.cmd start` 是后台启动模式，适合开发调试；普通游玩更推荐双击 `start-sunny-town.bat`，这样关闭窗口就会停止服务。
 
+## 本地发布包
+
+生成 `1.0.0-rc.1` 本地浏览器发布候选包：
+
+```powershell
+npm.cmd run package:local
+```
+
+输出位置：
+
+```text
+dist/sunny-town-story-1.0.0-rc.1/
+dist/sunny-town-story-1.0.0-rc.1.zip
+```
+
+发布包会带上游戏源码、贴图、文档、Windows 启停脚本和运行时需要的 `three.module.js`。玩家机器仍需要 Python 3 来启动本地静态服务；如果包内已经有 Three.js 运行文件，`start-sunny-town.bat` 不会再强制要求 npm 或联网安装依赖。
+
+验证发布包结构和包内静态服务：
+
+```powershell
+npm.cmd run verify:package
+```
+
 ## 测试
 
 ```powershell
@@ -261,7 +292,7 @@ npm.cmd test
 当前预期结果：
 
 ```text
-31 passed
+36 passed
 ```
 
 视觉截图回归：
@@ -274,6 +305,12 @@ npm.cmd run test:visual
 
 ```powershell
 npm.cmd run assets:textures
+```
+
+干净源码验证：
+
+```powershell
+npm.cmd run verify:clean
 ```
 
 测试覆盖：
@@ -291,6 +328,7 @@ npm.cmd run assets:textures
 - 大量通勤会提高普通道路拥堵并降低交通评分
 - 视觉移动体数量大于 0 且不超过 60
 - P4 音频设置、背景音乐开关、快捷键、撤销、镜头控制和表现动效
+- P5 版本显示、游戏内帮助、坏存档恢复、新游戏/继续游戏和全工具建造/升级/拆除 QA
 - 1440 x 900、1366 x 768 视觉框架截图
 
 ## 测试接口
@@ -316,6 +354,10 @@ window.sunnyTownTest.startNewGame(options)
 window.sunnyTownTest.upgradeSelectedBuilding()
 window.sunnyTownTest.upgradeState(x, z)
 window.sunnyTownTest.setSettings(settings)
+window.sunnyTownTest.setHelpOpen(open)
+window.sunnyTownTest.loadFromStorage()
+window.sunnyTownTest.writeRawSave(value)
+window.sunnyTownTest.clearRawSave()
 window.sunnyTownTest.undo()
 ```
 
@@ -328,7 +370,7 @@ window.sunnyTownTest.advanceWeek(4);
 console.log(window.sunnyTownTest.getState().stats.traffic);
 ```
 
-`getState()` 会返回统计数据、章节、存档状态、设置、资源清单摘要、贴图加载状态、动效数量、撤销栈、镜头状态、道路列表、建筑列表、居民路线、顾问消息和视觉移动体数量，方便自动化测试和调试。
+`getState()` 会返回版本号、统计数据、章节、存档状态、设置、帮助弹层状态、资源清单摘要、贴图加载状态、动效数量、撤销栈、镜头状态、道路列表、建筑列表、居民路线、顾问消息和视觉移动体数量，方便自动化测试和调试。
 
 ## GitHub
 
@@ -355,19 +397,28 @@ main
 - 只做桌面 16:9 优先布局，不做移动端适配。
 - 当前是休闲化经营原型，不是完整大型城市模拟器。
 - 地图固定为 18 x 18，暂不支持随机地图、扩展地图或地形编辑。
-- 当前 PNG 贴图为可复现占位资产，最终 AI 辅助或手工美术替换仍留到 P5 前资源制作。
+- 当前 PNG 贴图为可复现占位资产。P5 计划用 AI 辅助或手工美术替换 11 张 `AssetManifest` 贴图；如果当前执行环境没有图像生成工具，应保持路径稳定并先完成功能 QA。
 - 建筑、车辆、居民、道路和粒子仍主要由 Three.js 基础几何体生成，建筑表面已优先加载项目内 PNG 像素贴图并保留 canvas 回退；暂未引入 GLTF 模型。
 - 居民是模拟层独立对象，但屏幕上只抽样显示最多 60 个移动体以控制性能。
+
+更多 P5 发布候选说明、更新日志、QA、锁版和贴图生产资料见：
+
+```text
+docs/P5_QA_REPORT.md
+docs/P5_RC_LOCK.md
+docs/P5_RELEASE_NOTES.md
+docs/P5_TEXTURE_PROMPTS.md
+```
 
 ## 后续路线
 
 建议优先级：
 
-1. 完成 P5 QA：新游戏、继续游戏、坏存档、章节通关、极端城市和低性能设备。
-2. 替换当前占位 PNG 为最终 AI 辅助或手工像素贴图，并保留资源清单路径稳定。
-3. 完成玩家说明、游戏内帮助页、版本号、更新日志和已知问题文档。
-4. 做满图/满居民性能基线，必要时优化移动体、材质和 UI 渲染。
-5. 评估离线发布包；默认保持桌面浏览器本地运行，后续再考虑 Electron/Tauri。
+1. 替换当前占位 PNG 为最终 AI 辅助或手工像素贴图，并保留资源清单路径稳定。
+2. 做低性能设备和长时间人工游玩验收，补齐自动化无法覆盖的体感问题。
+3. 在独立新电脑或 VM 上验证克隆、安装、测试和本地发布包运行。
+4. 根据 RC 反馈微调平衡、文案和帮助内容。
+5. 默认保持桌面浏览器本地运行，1.0 前不引入 Electron/Tauri。
 
 ## License
 

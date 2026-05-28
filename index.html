@@ -14,6 +14,7 @@
         <section class="brand">
           <p>HARU HARBOR / 晴日建设课</p>
           <h1>阳光小镇物语</h1>
+          <small id="versionLabel">1.0.0-rc.1</small>
         </section>
         <section class="city-stats" aria-label="城市状态">
           <div><span>资金</span><strong id="money">¥50,000</strong></div>
@@ -128,6 +129,7 @@
             <input id="volumeSlider" type="range" min="0" max="100" value="45" />
           </label>
           <button id="shortcutHelpButton" class="icon-button" type="button" title="快捷键">?</button>
+          <button id="helpButton" class="icon-button" type="button" title="游戏帮助">i</button>
           <small id="shortcutHint">1-4 工具 / B 拆除 / U 撤销 / V 速度 / C 回中 / +/- 缩放 / 空格暂停</small>
         </section>
         <section class="tool-hint">
@@ -135,6 +137,46 @@
           <p id="hintText">选择道路等级后点击草地铺路。建筑必须贴近道路才会运行。</p>
         </section>
       </footer>
+
+      <section id="helpOverlay" class="help-overlay" aria-label="游戏帮助" aria-hidden="true">
+        <article class="help-panel" role="dialog" aria-modal="false" aria-labelledby="helpTitle">
+          <header>
+            <span id="helpVersion">1.0.0-rc.1</span>
+            <button id="helpCloseButton" type="button" title="关闭帮助">×</button>
+          </header>
+          <h2 id="helpTitle">晴日建设手册</h2>
+          <div class="help-grid">
+            <section>
+              <h3>开局顺序</h3>
+              <p>先铺主街，再放住宅、商业或工业，最后补电力和水塔。建筑必须贴近道路才会运行。</p>
+            </section>
+            <section>
+              <h3>道路与通勤</h3>
+              <p>居民会沿道路去工作或消费。普通道路便宜，樱花大道容量更高，适合作为主干路。</p>
+            </section>
+            <section>
+              <h3>水电与服务</h3>
+              <p>电力、水塔、公园、学校、消防和地标都会通过半径、道路可达与容量影响住宅。</p>
+            </section>
+            <section>
+              <h3>升级与成长</h3>
+              <p>选择建筑后可升级。升级需要资金、幸福、服务或交通条件，详情会显示在格子信息里。</p>
+            </section>
+            <section>
+              <h3>存档</h3>
+              <p>可手动保存、自动保存、新游戏和清除存档。若本地存档损坏，游戏会提示并回到新游戏。</p>
+            </section>
+            <section>
+              <h3>快捷键</h3>
+              <p>1-4 选择基础工具，A 切换道路，B 拆除，U 或 Ctrl+Z 撤销，V 调速度，C 回中，空格暂停。</p>
+            </section>
+          </div>
+          <footer>
+            <strong>目标</strong>
+            <p>完成五章主线：人口 800、幸福度达标、污染受控且资金为正。完成后仍可自由建设。</p>
+          </footer>
+        </article>
+      </section>
     </main>
 
     <script type="module" src="./src/app.js"></script>

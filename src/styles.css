@@ -100,6 +100,14 @@ button {
   line-height: 1;
 }
 
+.brand small {
+  display: block;
+  margin-top: 6px;
+  color: #7b8b90;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .city-stats {
   display: grid;
   grid-template-columns: repeat(7, minmax(72px, 1fr));
@@ -707,6 +715,108 @@ button {
 
 #shortcutHint.is-open {
   display: block;
+}
+
+.help-overlay {
+  position: fixed;
+  top: 112px;
+  right: 16px;
+  bottom: 92px;
+  z-index: 8;
+  display: none;
+  width: 390px;
+  max-width: calc(100vw - 32px);
+  pointer-events: auto;
+}
+
+.help-overlay.is-open {
+  display: block;
+}
+
+.help-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  height: 100%;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 248, 232, 0.96);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  padding: 16px;
+}
+
+.help-panel header,
+.help-panel footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.help-panel header span,
+.help-panel footer strong {
+  color: #5aa27d;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.help-panel h2 {
+  margin: 0;
+  color: #425f68;
+  font-size: 1.18rem;
+  line-height: 1.15;
+}
+
+.help-panel h3 {
+  margin: 0 0 5px;
+  color: #4f6b73;
+  font-size: 0.82rem;
+}
+
+.help-panel p {
+  margin: 0;
+  color: #62767b;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.help-panel button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(103, 184, 255, 0.34);
+  border-radius: 8px;
+  background: #fffdf6;
+  color: #4d6872;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.help-grid section,
+.help-panel footer {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 253, 245, 0.92);
+}
+
+.help-panel footer {
+  display: block;
+}
+
+.help-panel footer p {
+  margin-top: 5px;
 }
 
 .tool-hint {

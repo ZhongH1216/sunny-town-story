@@ -1028,3 +1028,191 @@ test("manual saves unlock an achievement and update save status", async ({ page 
   expect(after.saveStatus).toContain("手动保存");
   await expect(page.locator("#saveStatus")).toContainText("手动保存");
 });
+
+test("P5 RC version and in-game help are visible and controllable", async ({ page }) => {
+  await page.goto("/?test=1");
+  let after = await state(page);
+  expect(after.version).toBe("1.0.0-rc.1");
+  expect(after.saveVersion).toBe(2);
+  await expect(page.locator("#versionLabel")).toContainText("1.0.0-rc.1");
+  await expect(page.locator("#helpOverlay")).not.toBeVisible();
+
+  await page.locator("#helpButton").click();
+  after = await state(page);
+  expect(after.helpOpen).toBe(true);
+  await expect(page.locator("#helpOverlay")).toBeVisible();
+  await expect(page.locator("#helpOverlay")).toContainText("开局顺序");
+  await expect(page.locator("#helpOverlay")).toContainText("道路与通勤");
+  await expect(page.locator("#helpOverlay")).toContainText("水电与服务");
+  await expect(page.locator("#helpOverlay")).toContainText("升级与成长");
+  await expect(page.locator("#helpOverlay")).toContainText("存档");
+  await expect(page.locator("#helpOverlay")).toContainText("快捷键");
+  await expect(page.locator("#helpVersion")).toContainText("1.0.0-rc.1");
+
+  await page.keyboard.press("Escape");
+  after = await state(page);
+  expect(after.helpOpen).toBe(false);
+  await expect(page.locator("#helpOverlay")).not.toBeVisible();
+});
+
+test("P5 bad local save is removed with clear player-facing recovery", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    window.sunnyTownTest.writeRawSave("{bad json");
+    window.sunnyTownTest.loadFromStorage();
+  });
+  const after = await state(page);
+  expect(after.saveStatus).toContain("存档损坏");
+  expect(after.messages[0]).toContain("本地存档损坏");
+  await expect(page.locator("#saveStatus")).toContainText("存档损坏");
+  const raw = await page.evaluate(() => localStorage.getItem("sunny-town-story.save.v1"));
+  expect(raw).toBeNull();
+});
+
+test("P5 save lifecycle supports continue, new game and clear storage", async ({ page }) => {
+  await page.goto("/?test=1");
+  const snapshot = await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.place("road", 2, 2, { tier: "lane" });
+    t.place("residential", 2, 3);
+    t.advanceWeek(2);
+    t.saveGame(true);
+    return t.serializeGame();
+  });
+
+  await page.evaluate((save) => {
+    window.sunnyTownTest.startNewGame({ keepStorage: true });
+    window.sunnyTownTest.loadSave(save);
+  }, snapshot);
+  let after = await state(page);
+  expect(after.roads.some((road) => road.x === 2 && road.z === 2)).toBe(true);
+  expect(after.buildings.some((building) => building.x === 2 && building.z === 3 && building.type === "residential")).toBe(true);
+  expect(after.saveStatus).toContain("已读取");
+
+  await page.evaluate(() => window.sunnyTownTest.startNewGame());
+  after = await state(page);
+  expect(after.week).toBe(1);
+  expect(after.roadCount).toBeGreaterThan(0);
+  expect(after.buildings.some((building) => building.x === 2 && building.z === 3)).toBe(false);
+  const raw = await page.evaluate(() => localStorage.getItem("sunny-town-story.save.v1"));
+  expect(raw).toBeNull();
+});
+
+test("P5 all buildable tools can be placed and removable in an unlocked QA town", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.startNewGame({ keepStorage: true });
+    t.setMoney(900000);
+    t.setQaMetrics({
+      chapterIndex: 4,
+      stats: {
+        population: 900,
+        happiness: 90,
+        traffic: 90,
+        power: 100,
+        water: 100,
+        education: 100,
+        fire: 100,
+        culture: 100,
+        transport: 100,
+        employmentRate: 90,
+      },
+    });
+    for (let x = 1; x <= 16; x += 1) t.place("road", x, 6, { tier: "avenue" });
+    [
+      ["residential", 1, 7],
+      ["commercial", 2, 7],
+      ["industrial", 3, 7],
+      ["power", 4, 7],
+      ["water", 5, 7],
+      ["fire", 6, 7],
+      ["park", 7, 7],
+      ["school", 8, 5],
+      ["plaza", 9, 7],
+      ["station", 10, 7],
+      ["lantern", 11, 7],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+    t.setQaMetrics({
+      stats: {
+        population: 900,
+        happiness: 90,
+        traffic: 90,
+        power: 100,
+        water: 100,
+        education: 100,
+        fire: 100,
+        culture: 100,
+        transport: 100,
+        employmentRate: 90,
+        money: 850000,
+      },
+    });
+    t.setSelectedTile(4, 7);
+    t.upgradeSelectedBuilding();
+    t.place("bulldoze", 10, 7);
+  });
+
+  const after = await state(page);
+  const types = new Set(after.buildings.map((building) => building.type));
+  ["residential", "commercial", "industrial", "power", "water", "park", "school", "plaza", "fire", "lantern"].forEach((type) => {
+    expect(types.has(type), `${type} should be placed`).toBe(true);
+  });
+  expect(types.has("station")).toBe(false);
+  expect(after.buildings.find((building) => building.type === "power").level).toBeGreaterThanOrEqual(2);
+  expect(after.achievements).toContain("first_upgrade");
+});
+
+test("P5 dense extreme town stays finite, capped and advisory-readable", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.evaluate(() => {
+    const t = window.sunnyTownTest;
+    t.startNewGame({ keepStorage: true });
+    t.setMoney(1400000);
+    for (const z of [2, 4, 6, 8, 10, 12, 14, 16]) {
+      for (let x = 1; x <= 16; x += 1) t.place("road", x, z, { tier: x % 3 === 0 ? "lane" : "avenue" });
+    }
+    for (const x of [2, 5, 8, 11, 14, 16]) {
+      for (let z = 1; z <= 16; z += 1) t.place("road", x, z, { tier: z % 4 === 0 ? "lane" : "avenue" });
+    }
+    [
+      ["power", 2, 1], ["water", 3, 1], ["power", 5, 1], ["water", 6, 1],
+      ["power", 8, 1], ["water", 9, 1], ["power", 11, 1], ["water", 12, 1],
+      ["power", 14, 1], ["water", 15, 1], ["power", 2, 17], ["water", 5, 17],
+      ["power", 8, 17], ["water", 11, 17], ["power", 14, 17],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+    const homes = [];
+    for (const z of [3, 5, 7, 9, 11, 13, 15, 17]) {
+      for (const x of [1, 3, 4, 6, 7, 9, 10, 12, 13, 15]) {
+        homes.push([x, z]);
+      }
+    }
+    homes.slice(0, 58).forEach(([x, z]) => t.place("residential", x, z));
+    [[1, 1], [4, 1], [7, 1], [10, 1], [13, 1], [16, 1], [3, 17], [6, 17], [9, 17], [12, 17]].forEach(([x, z]) => t.place("commercial", x, z));
+    [[16, 3], [16, 5], [16, 7], [16, 9], [16, 11], [16, 13]].forEach(([x, z]) => t.place("industrial", x, z));
+    t.advanceWeek(42);
+    [
+      ["park", 3, 3], ["park", 6, 5], ["park", 9, 7], ["park", 12, 9],
+      ["school", 4, 3], ["school", 7, 5], ["school", 10, 7],
+      ["fire", 13, 9], ["fire", 13, 11],
+      ["plaza", 6, 13], ["station", 9, 13], ["lantern", 12, 13],
+    ].forEach(([type, x, z]) => t.place(type, x, z));
+    t.advanceWeek(120);
+    t.place("bulldoze", 8, 8);
+    t.place("bulldoze", 8, 10);
+    t.setMoney(-18000);
+    t.recompute();
+  });
+
+  const after = await state(page);
+  const numericStats = Object.values(after.stats).filter((value) => typeof value === "number");
+  expect(numericStats.every(Number.isFinite)).toBe(true);
+  expect(after.roadCount).toBeGreaterThan(120);
+  expect(after.buildingCount).toBeGreaterThan(70);
+  expect(after.residentCount).toBeGreaterThan(450);
+  expect(after.visualAgentCount).toBeLessThanOrEqual(60);
+  expect(after.stats.money).toBeLessThan(0);
+  expect(after.stats.fiscal.score).toBeLessThan(65);
+  expect(after.advisor.map((item) => `${item.title} ${item.text}`).join("\n")).toMatch(/财政|断路|拥堵|通勤|电力|教育|供水/);
+  expect(after.history.every((item) => Number.isFinite(item.population) && Number.isFinite(item.money) && Number.isFinite(item.net))).toBe(true);
+});

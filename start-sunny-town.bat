@@ -30,6 +30,16 @@ set "URL=http://%HOST%:%PORT%"
 call :find_conda
 call :find_conda_env
 
+if exist "node_modules\three\build\three.module.js" (
+  if defined HAS_CONDA_ENV (
+    set "PYTHON_CMD=%CONDA_PREFIX_PATH%\python.exe"
+    set "PYTHON_ARGS="
+    set "NPM_CMD=%CONDA_PREFIX_PATH%\npm.cmd"
+    goto tools_ready
+  )
+  goto find_python
+)
+
 if not defined HAS_CONDA_ENV (
   if defined CONDA_CMD (
     echo Development environment %CONDA_ENV% was not found.
@@ -48,6 +58,7 @@ if defined HAS_CONDA_ENV (
   goto tools_ready
 )
 
+:find_python
 if defined PYTHON_CMD goto find_global_npm
 
 where py >nul 2>nul
@@ -66,6 +77,8 @@ if not errorlevel 1 (
 goto missing_python
 
 :find_global_npm
+if exist "node_modules\three\build\three.module.js" goto tools_ready
+
 where npm.cmd >nul 2>nul
 if not errorlevel 1 (
   set "NPM_CMD=npm.cmd"
@@ -77,10 +90,10 @@ goto missing_npm
 call "%PYTHON_CMD%" %PYTHON_ARGS% --version >nul 2>nul
 if errorlevel 1 goto missing_python
 
+if exist "node_modules\three\build\three.module.js" goto launch
+
 call "%NPM_CMD%" --version >nul 2>nul
 if errorlevel 1 goto missing_npm
-
-if exist "node_modules\three\build\three.module.js" goto launch
 
 echo Dependencies were not found. Running npm install...
 call "%NPM_CMD%" install
