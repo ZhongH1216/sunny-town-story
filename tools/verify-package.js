@@ -6,14 +6,14 @@ const zlib = require("node:zlib");
 const { spawn } = require("node:child_process");
 const { chromium } = require("@playwright/test");
 const { root, resolvePython, spawnSpec } = require("./env");
-const { packageName, packageDir, zipPath, distRoot, listFiles, sha256 } = require("./package-local");
+const { packageName, packageDir, zipPath, distRoot, runtimeSourceFiles, listFiles, sha256 } = require("./package-local");
 const pkg = require("../package.json");
 
 const requiredFiles = [
   "PACKAGE_README.txt", "PACKAGE_MANIFEST.json", "README.md", "docs/DEMO_RELEASE_NOTES.md",
   "app.py", "index.html", "package.json", "package-lock.json",
   "start-sunny-town.bat", "stop-sunny-town.bat", "scripts/find-python.bat",
-  "src/app.js", "src/asset-manifest.js", "src/styles.css",
+  ...runtimeSourceFiles,
   "node_modules/three/LICENSE", "node_modules/three/package.json",
   "node_modules/three/build/three.module.js", "node_modules/three/build/three.core.js",
 ];
@@ -298,7 +298,7 @@ async function verifyServer() {
     const baseUrl = "http://127.0.0.1:" + port;
     await waitForServer(baseUrl, child);
     if (spawnError) throw spawnError;
-    for (const route of ["/", "/src/app.js", "/node_modules/three/build/three.module.js", "/node_modules/three/build/three.core.js", ...readTexturePaths(extractedDir).map((file) => "/" + file)]) {
+    for (const route of ["/", ...runtimeSourceFiles.map((file) => "/" + file), "/node_modules/three/build/three.module.js", "/node_modules/three/build/three.core.js", ...readTexturePaths(extractedDir).map((file) => "/" + file)]) {
       const status = await request(baseUrl + route);
       if (status !== 200) fail("Package route failed " + route + ": HTTP " + status);
     }

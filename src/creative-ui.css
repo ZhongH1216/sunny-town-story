@@ -1,0 +1,116 @@
+/* Give the town more room, with clear ink and warm, solid paper surfaces. */
+:root { --ink: #304c50; --muted: #718080; --paper: #fffdf5; --cream-strong: #fffdf5; --accent: #367d78; --line: #d9e3db; --shadow: 0 4px 18px #244c5d12; }
+.game-shell { grid-template-columns: 170px minmax(390px, 1fr) 294px; gap: 14px; padding: 14px; grid-template-rows: 70px minmax(0,1fr) 58px; }
+.top-hud, .build-panel, .advisor-panel, .bottom-bar { background: var(--paper); border-color: #fffefb; box-shadow: 0 3px 18px #16415316; }
+.top-hud { padding: 10px 15px; grid-template-columns: 220px minmax(0,1fr) 146px; gap: 15px; }
+.brand h1 { color: #284b51; font-size: 19px; }
+.brand-sun { color: #dca850; }
+.city-stats div { padding: 3px 10px; }
+.city-stats strong { color: #31555b; font-size: 16px; }
+.city-stats span { color: #748887; }
+.build-panel { padding: 14px 10px 10px; }
+.build-intro { color: #778f89; }
+.tool-button { min-height: 55px; background: #fffef9; border-color: #e2e7df; padding: 7px 5px; column-gap: 2px; }
+.tool-button strong { color: #40595b; }
+.tool-button small { color: #78908a; }
+.tool-button.active { background: #dfefdf; border-color: #81ab8a; }
+.tool-button[data-tool=residential] span { color: #d58e78; }
+.tool-button[data-tool=commercial] span { color: #d5a249; }
+.tool-button[data-tool=industrial] span { color: #7394a3; }
+.tool-button[data-tool=water] span { color: #479fae; }
+.tool-button[data-tool=park] span { color: #68a477; }
+.advisor-panel { padding: 13px; }
+.demo-objective { background: #f0f4e8; border-color: #e0e8d5; }
+.demo-objective strong { color: #48694c; }
+.journal-tabs { border-bottom: 1px solid #dbe4da; }
+.journal-tabs button { font-size: 12px; color: #758883; }
+.journal-tabs button.active { color: #307c74; }
+.journal-pages { padding-top: 12px; }
+.selection-card { background: #f5f5eb; border-top: 1px solid #e3e6d9; }
+.selection-card p { color: #6c817c; }
+.map-caption { top: 108px; left: 211px; text-shadow: 0 1px 12px #fff9dc; }
+.map-caption > span { color: #345e65; }
+.map-caption small { color: #4e7b7b; }
+.view-mode { left: 209px; bottom: 87px; background: #fffdf5; box-shadow: var(--shadow); }
+.creative-tools { position: fixed; left: 208px; top: 168px; display: flex; align-items: stretch; gap: 8px; pointer-events: auto; }
+.creative-tools button { display: flex; align-items: center; gap: 7px; min-height: 36px; border: 1px solid #ffffffb8; border-radius: 9px; padding: 7px 12px; color: #315e64; background: #fffdf5; box-shadow: 0 3px 12px #2c5f6420; font-size: 11px; }
+.creative-tools button:hover { background: #eaf6ef; border-color: #8bb8aa; }
+.creative-tools button small { border-left: 1px solid #d7e4da; padding-left: 8px; font-size: 10px; color: #7b9184; }
+.creative-tools svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.neighborhood-board { margin-bottom: 16px; }
+.advisor-panel[data-journal-panel=guide] .demo-objective { padding: 0; border: 0; background: none; margin-bottom: 9px; }
+.advisor-panel[data-journal-panel=guide] .objective-heading,
+.advisor-panel[data-journal-panel=guide] .demo-objective > strong,
+.advisor-panel[data-journal-panel=guide] .objective-progress,
+.advisor-panel[data-journal-panel=guide] .town-pulse { display: none; }
+.advisor-panel[data-journal-panel=guide] .next-step { margin-top: 0; }
+.neighborhood-intro { padding: 13px; border-radius: 9px; background: #e8f1e8; border: 1px solid #d9e5d6; }
+.neighborhood-intro > span { font-size: 9px; letter-spacing: 1px; color: #729274; }
+.neighborhood-intro h3 { margin: 8px 0; font-size: 16px; color: #395d57; }
+.neighborhood-intro p { margin: 0; font-size: 11px; line-height: 1.7; color: #6b8278; }
+.neighborhood-card { margin-top: 10px; padding: 12px; border: 1px solid #e0e6dc; border-radius: 10px; background: #fffdf7; }
+.neighborhood-card.is-active, .neighborhood-card.is-ready { border-color: #8fba9c; background: #f1f7e9; }
+.neighborhood-card.is-focused { box-shadow: inset 3px 0 #78a299; }
+.neighborhood-card header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 7px; }
+.neighborhood-card strong { font-size: 13px; color: #3c6061; }
+.neighborhood-card p, .neighborhood-card li { font-size: 11px; line-height: 1.65; color: #71827b; }
+.neighborhood-card p { margin: 7px 0; }
+.neighborhood-card ul { padding-left: 15px; margin: 7px 0; }
+.neighborhood-card small { font-size: 10px; color: #8c9684; }
+.neighborhood-stars { color: #c8a05c; letter-spacing: 2px; white-space: nowrap; }
+.neighborhood-card button { border: 1px solid #cddfce; border-radius: 6px; padding: 7px 9px; margin: 5px 4px 0 0; background: #e8f0df; color: #527758; font-size: 11px; }
+.neighborhood-card button:hover { background: #d9e9d0; }
+.neighborhood-card [data-neighborhood-claim] { color: #fffdf4; border-color: #6e9d82; background: #6e9d82; }
+.neighborhood-summary { margin: 9px 0; font-size: 11px; color: #55756b; line-height: 1.6; }
+.neighborhood-card [data-met=true], .neighborhood-card .is-met { color: #468762; }
+.neighborhood-card [data-met=false] { color: #9a8b72; }
+.neighborhood-board-header, .neighborhood-card-heading, .neighborhood-meta { display: flex; justify-content: space-between; align-items: center; gap: 7px; }
+.neighborhood-board-header h3 { margin: 5px 0 9px; color: #3c6464; font-size: 17px; }
+.neighborhood-board-header .eyebrow { color: #819580; font-size: 9px; letter-spacing: 1px; }
+.neighborhood-board-header > strong { padding: 7px 9px; background: #dfefdb; color: #4c7e60; border-radius: 6px; font-size: 12px; white-space: nowrap; }
+.neighborhood-board > p.neighborhood-intro { font-size: 10px; color: #6e877b; line-height: 1.75; padding: 10px; }
+.neighborhood-card h4 { margin: 0; color: #3e6765; font-size: 13px; }
+.neighborhood-card.is-formed { border-color: #9fc5a9; }
+.neighborhood-card details { border-top: 1px dashed #dce4d8; margin-top: 9px; padding-top: 8px; }
+.neighborhood-card summary { cursor: pointer; color: #86917f; font-size: 10px; }
+.neighborhood-conditions { padding-left: 15px; margin: 9px 0; }
+.neighborhood-conditions li { margin: 6px 0; font-size: 10px; }
+.neighborhood-next { border-left: 2px solid #d9bb87; padding-left: 8px; }
+.neighborhood-meta { margin-top: 9px; }
+.neighborhood-meta span { font-size: 10px; color: #809181; }
+.neighborhood-meta strong { color: #659272; font-size: 11px; }
+.neighborhood-actions { display: flex; gap: 5px; }
+.neighborhood-actions button { flex: 1; font-size: 10px; margin-right: 0; padding: 7px 5px; }
+.neighborhood-footnote { font-size: 10px; color: #859180; line-height: 1.7; }
+.photo-mode-bar { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 42px; z-index: 30; padding: 17px 23px; border: 1px solid #fffef8; border-radius: 15px; background: #fffdf5; box-shadow: 0 6px 30px #214b6728; }
+.photo-mode-bar div { display: grid; gap: 4px; white-space: nowrap; }
+.photo-mode-bar span { font-size: 9px; letter-spacing: 2px; color: #87a18f; }
+.photo-mode-bar strong { font-size: 15px; color: #3c6869; }
+.photo-mode-bar small { color: #8a9586; font-size: 10px; }
+.photo-mode-bar button { padding: 11px 14px; border: 1px solid #bcd2c1; border-radius: 8px; background: #e9f0df; color: #587a63; white-space: nowrap; font-size: 12px; }
+.photo-mode-bar kbd { margin-left: 10px; font-size: 10px; color: #889881; }
+body.is-photo-mode .game-shell, body.is-photo-mode #demoToast, body.is-photo-mode .placement-hint { visibility: hidden; pointer-events: none; }
+body.is-photo-mode .game-shell * { pointer-events: none; }
+@media (max-height: 790px) {
+  .game-shell { grid-template-rows: 65px minmax(0,1fr) 52px; gap: 11px; padding: 12px; }
+  .build-panel { padding: 10px 9px; }
+  .build-panel .panel-title { margin-bottom: 8px; }
+  .build-intro { margin-bottom: 9px; }
+  .tool-button { min-height: 48px; padding: 5px; grid-template-rows: 22px 11px; }
+  .tool-grid { gap: 4px; }
+  .build-tip { padding-top: 8px; }
+  .creative-tools { top: 153px; left: 205px; }
+  .map-caption { top: 100px; }
+  .view-mode { bottom: 79px; }
+}
+@media (max-width: 1300px) {
+  .game-shell { grid-template-columns: 158px minmax(350px,1fr) 280px; }
+  .top-hud { grid-template-columns: 193px minmax(0,1fr) 138px; gap: 8px; }
+  .brand h1 { font-size: 17px; }
+  .brand-sun { font-size: 36px; }
+  .city-stats div { padding: 3px 8px; }
+  .city-stats strong { font-size: 14px; }
+  .save-controls { width: 138px; }
+  .creative-tools, .map-caption, .view-mode { left: 188px; }
+  .creative-tools button small { display: none; }
+}

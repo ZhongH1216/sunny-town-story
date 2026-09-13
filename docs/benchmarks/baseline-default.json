@@ -1,0 +1,34 @@
+{
+  "label": "baseline",
+  "backendRequested": "default-angle",
+  "backend": {
+    "lost": true,
+    "renderer": null
+  },
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "ok": false,
+  "error": "Default graphics context was lost; no comparable measurements collected",
+  "testMode": true,
+  "preserveDrawingBuffer": true,
+  "metricNotes": "Single serial Chromium page. TaskDuration is page main-thread time, not whole-machine CPU. Heap is an end-of-window snapshot without forced GC. Both runs use the same software renderer and test-only preserved drawing buffer; values are rounded to two decimals.",
+  "sourceReference": {
+    "archive": "sunny-town-story-1.0.0-demo.3.zip",
+    "archiveSha256": "7ff32c4bcef56dfa942674184095b01f4b17de82066810957d88160492d47166",
+    "archiveSourceHashes": {
+      "src/app.js": "04b316698b288964f13af51a91b05f6487a927fc8cb593bfe3e7c7697f4c76c3",
+      "src/world-art.js": "aeee0b7e0ae791bb03c7c2fbc48bb3cb6645fb593f8200cc36bf7e8fd6ba81de"
+    },
+    "diagnosticPatch": {
+      "file": "src/app.js",
+      "replace": "rendering: { calls: renderer.info.render.calls, geometries:",
+      "with": "rendering: { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries:"
+    },
+    "note": "Measurement-time working-tree hashes and automated change detection were not captured for the baseline and are unknown. The listed hashes belong to the independently verified local demo.3 archive; the baseline added only the documented test-state diagnostic getter."
+  },
+  "samples": [],
+  "sourceHashes": null,
+  "sourceChangedDuringProbe": null
+}

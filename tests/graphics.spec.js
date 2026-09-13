@@ -11,16 +11,20 @@ test('the graphics context survives normal launch and a populated town reload', 
   expect((await context()).lost).toBe(false);
 });
 
-test('a lost graphics context stops simulation, offers backup and resumes after restoration', async ({ page }) => {
+test('a lost graphics context exits photo mode, stops simulation, offers backup and resumes after restoration', async ({ page }) => {
   await page.goto('/?test=1');
   await page.waitForFunction(() => window.sunnyTownTest?.life);
   await page.evaluate(() => {
     window.sunnyTownTest.demo.startScenario('harbor');
+    window.sunnyTownTest.photo.enter();
     window.testGraphicsExtension = document.querySelector('#scene').getContext('webgl2').getExtension('WEBGL_lose_context');
     window.testGraphicsExtension.loseContext();
   });
   await expect(page.locator('#graphicsRecovery')).toBeVisible();
+  await expect(page.locator('#photoModeBar')).toBeHidden();
   const before = await page.evaluate(() => window.sunnyTownTest.getState());
+  expect(before.photoMode).toBe(false);
+  expect(before.paused).toBe(false); // Preserve the running state from before photo mode.
   await page.waitForTimeout(400);
   await page.keyboard.press('2');
   const after = await page.evaluate(() => window.sunnyTownTest.getState());

@@ -90,6 +90,7 @@ async function main() {
   await run(npm, ["ci", ...(process.argv.includes("--offline") ? ["--offline"] : [])], cleanProject, env);
   await run(npm, ["run", "check"], cleanProject, env);
   await run(npm, ["run", "test:server"], cleanProject, env);
+  await run(npm, ["run", "test:art"], cleanProject, env);
   await run(npm, ["test"], cleanProject, env);
   await run(npm, ["run", "verify:package"], cleanProject, env);
   console.log("Clean-source verification passed");

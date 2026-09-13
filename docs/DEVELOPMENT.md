@@ -2,6 +2,8 @@
 
 阳光小镇物语使用 Three.js、原生 JavaScript 和 Python 本地静态服务。当前开发与验收平台是 Windows，使用 Node.js 22、npm 和 Python 3.10 或更新版本；Playwright 用于浏览器回归。Conda 是可选开发工具，玩家运行试玩包不需要 Node.js、npm 或 Conda。
 
+当前开发版本为 **1.0.0-demo.4 街区灵感**，已通过本地完整干净源码和实际 ZIP 验收；GitHub 附件状态以版本列表为准。
+
 玩法、键鼠操作与玩家运行说明见 [项目首页](../README.md)。版本验收结果、试玩范围与已知限制见 [试玩发布说明](DEMO_RELEASE_NOTES.md)。
 
 ## 配置开发环境
@@ -50,13 +52,19 @@ npm.cmd run serve
 | `src/app.js` | 城市模拟、道路寻路、主场景、输入、存档与性能设置。 |
 | `src/demo.js` | 三种故事、居民来信、市政抉择、祭典与试玩弹层。 |
 | `src/town-life.js` | 四季活动、口碑、永久社区项目、收藏和活动记录。 |
-| `src/world-art.js` | 海港环境、建筑细节与程序化场景表现。 |
+| `src/world-art.js`、`src/art-batch.js` | 原创低多边形海岛与建筑、顶点颜色几何合批。 |
+| `src/neighborhoods.js` | 四主题空间组合、预览、游客收益、一次性奖励与独立存档归一化。 |
+| `src/creative-controls.js`、`src/creative-ui.css` | 观景状态 / 暂停恢复与街区、观景界面。 |
 | `index.html`、`src/demo-ui.css`、`src/interface.js` | 欢迎页、建设工具、手帖、弹层和界面交互。 |
-| `src/styles.css`、`src/asset-manifest.js`、`assets/textures/` | 基础样式、素材清单与 PNG 贴图。 |
+| `src/styles.css`、`src/asset-manifest.js`、`assets/textures/` | 基础样式与历史 PNG 生产源；当前模型使用顶点颜色，已删除旧贴图预加载。 |
 | `tests/` | 经营、试玩、活动、存档、稳定性、图形、性能和界面回归。 |
 | `tools/`、`scripts/` | 环境配置、测试入口、启动代理和发布包工具。 |
 
-地图为 18 × 18，当前交互面向桌面键鼠。模拟时间按周推进，每季 12 周；统计重算、建造和读取存档不应额外推进人口或活动进度。存档格式为 v3，兼容旧 v1 / v2 / v3 数据，新增的 `life` 字段是可选字段。
+地图为 18 × 18，当前交互面向桌面键鼠。模拟时间按周推进，每季 12 周；统计重算、建造和读取存档不应额外推进人口或活动进度。存档格式为 v3，兼容旧 v1 / v2 / v3 数据，`life` 和 demo.4 新增的 `neighborhoods` 均为可选字段。
+
+街区按格距、已连接道路和物理污染隔离计算，每主题只结算最佳一处。控制器的 `weekIncome()` 只返回收益，由主模拟在周结算加一次；`render()`、`preview()` 和 `analyze()` 不改变资金。`getRevision()` 必须随建筑 / 道路布局变化更新，以复用分析与预览；首次领取用独立 ID，清理旧撤销并持久化。
+
+新玩家画面默认标准 30 帧（设置值 `balanced`），旧存档有效偏好保留。观景是临时呈现状态，退出恢复进入前的暂停状态，不写成持久化暂停。
 
 调整经营或存档时，要区分每周模拟、统计重算、界面呈现与持久化操作。暂停、确认框、祭典结局、后台页面和图形连接丢失时的行为，也属于玩家流程的一部分。
 
@@ -66,16 +74,22 @@ npm.cmd run serve
 
 ```powershell
 npm.cmd run test:server
+npm.cmd run test:art
 npm.cmd test
 ```
 
-截至 **2026-09-13，`1.0.0-demo.3`** 的完整验收记录为 **62 / 62 项浏览器回归、2 / 2 项服务与 Node 启动脚本测试通过**，另有干净源码与实际 ZIP 启动验证。该数字是这一版本的记录，不代表后续修改自动通过。渲染后端和验收边界见下文及发布说明。
+`test:art` 通过 Node 内置测试运行器检查模型几何、共享模板与资源释放，不创建浏览器；它会在 GitHub 工作流和干净源码验收的 `test:server` 后运行。
+
+**demo.4 当前记录：83 项 Playwright 任务通过（68 项浏览器回归 + 15 项街区纯计算），3 项美术几何 / 资源测试、2 项服务 / 启动代理测试通过；干净源码离线 npm 安装、环境检查与实际 ZIP 验收通过。** `tests/neighborhoods.spec.js` 不请求 page / browser fixture，用数据模块导入实际源码，单独执行无需启动浏览器。
+
+完整日志为本地 `dist/demo4-clean-verification.log`，该轮从干净源码构建的实际 ZIP 有 70 个文件且哈希全部一致。后续文档和展示截图变更后需重新构建交付 ZIP。历史 demo.3 数字保留在发布说明中，不用于替代本版记录；性能方法与对照结果见[性能报告](PERFORMANCE.md)。
 
 按范围检查时，可以运行单个测试文件或界面测试：
 
 ```powershell
 npm.cmd test -- tests/demo.spec.js
 npm.cmd test -- tests/town-life.spec.js
+npm.cmd test -- tests/neighborhoods.spec.js
 npm.cmd test -- tests/stability.spec.js
 npm.cmd run test:visual
 ```
@@ -84,7 +98,7 @@ npm.cmd run test:visual
 
 ### 可选的软件渲染验证
 
-本轮本机 Chromium 的默认 ANGLE 后端出现过 SharedImage 创建失败和图形连接丢失。因此，demo.3 的完整浏览器及发布包验收显式使用 SwiftShader：
+demo.3 验证时，本机 Chromium 的默认 ANGLE 后端出现过 SharedImage 创建失败和图形连接丢失。因此，demo.3 的完整浏览器及发布包验收显式使用 SwiftShader：
 
 ```powershell
 $env:SUNNY_TOWN_SOFTWARE_WEBGL = "1"
@@ -110,12 +124,14 @@ npm.cmd run verify:package
 `package:local` 根据 `package.json` 中的版本生成目录、ZIP、包内文件校验清单和压缩包的 `.sha256` 文件。当前输出为：
 
 ```text
-dist/sunny-town-story-1.0.0-demo.3/
-dist/sunny-town-story-1.0.0-demo.3.zip
-dist/sunny-town-story-1.0.0-demo.3.zip.sha256
+dist/sunny-town-story-1.0.0-demo.4/
+dist/sunny-town-story-1.0.0-demo.4.zip
+dist/sunny-town-story-1.0.0-demo.4.zip.sha256
 ```
 
 `verify:package` 会重新构建，并从实际 ZIP 解压后检查文件哈希、浏览器启动、场景截图、试玩入口、存档和服务启停。截图与结果写入 `dist/package-verification/`；普通玩家模式使用浏览器实际截图检查场景，测试模式才读取保留的绘图缓冲区。
+
+构建递归复制整个 `src`，并通过共享的 `runtimeSourceFiles` 清单确认街区、观景、合批模块与三份样式存在且非空。解压包验证对这些文件进行清单 / 哈希检查和 HTTP 请求，实际浏览器仍检查场景与所有失败资源。新增独立的必需模块时，应同步这份最低运行契约。
 
 试玩包包含 Three.js 运行文件及素材，玩家无需安装 npm 依赖。包内不提供 Python 运行时，也不包含原生安装程序。
 
@@ -125,7 +141,7 @@ dist/sunny-town-story-1.0.0-demo.3.zip.sha256
 npm.cmd run verify:clean
 ```
 
-该命令在 `dist/clean-source-check/` 创建排除本地依赖和输出产物的源码副本，重新执行 `npm ci`、环境检查、服务与启动脚本测试、浏览器回归和发布包验证，并为测试服务选择独立端口。它包含完整验证流程，不必与另外一轮全量测试并行运行。
+该命令在 `dist/clean-source-check/` 创建排除本地依赖和输出产物的源码副本，重新执行 `npm ci`、环境检查、服务与启动脚本测试、场景几何 / 资源释放测试、浏览器回归和发布包验证，并为测试服务选择独立端口。它包含完整验证流程，不必与另外一轮全量测试并行运行。
 
 已有完整 npm 缓存时，也可以验证离线安装：
 
@@ -141,6 +157,6 @@ npm.cmd run verify:clean -- --offline
 
 仓库的 [验证与发布工作流](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml) 在面向 `main` 的 Pull Request 和手动运行时执行验收；推送 `v` 开头、与 `package.json` 版本一致的标签时，还会发布试玩预发布。
 
-工作流使用 Windows、Node.js 22、Python 3.12 和显式 SwiftShader，依次安装锁定依赖与浏览器、检查环境、运行服务及浏览器测试、验证实际 ZIP。只有全部通过，独立发布作业才上传 ZIP 和 SHA-256 校验文件，并发布 [版本说明](GITHUB_RELEASE.md)。普通验证只有读取仓库的权限；发布作业使用 GitHub 内置临时令牌，无需保存个人令牌。
+工作流使用 Windows、Node.js 22、Python 3.12 和显式 SwiftShader，依次安装锁定依赖与浏览器、检查环境、依次运行服务、场景几何及浏览器测试，再验证实际 ZIP。只有全部通过，独立发布作业才上传 ZIP 和 SHA-256 校验文件，并发布 [版本说明](GITHUB_RELEASE.md)。普通验证只有读取仓库的权限；发布作业使用 GitHub 内置临时令牌，无需保存个人令牌。
 
 发布前同步 `package.json`、锁文件、README 下载链接和版本说明，再提交并推送版本标签。已经公开发布的标签与附件不覆盖；后续修复应使用新版本。构建或验证失败时，先在 Actions 中查看失败步骤和诊断附件。

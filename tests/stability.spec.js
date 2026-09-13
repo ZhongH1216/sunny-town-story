@@ -170,25 +170,12 @@ test("eight real 3px mouse movements pan the map without building on release", a
     const current = game.getState();
     const canvas = document.getElementById("scene");
     const rect = canvas.getBoundingClientRect();
-    // Project a clear 3x3 grass patch using the app's public camera target and
-    // existing orthographic setup. The actual gesture below uses Playwright's
-    // browser mouse; it does not invoke or mock the app's pointer handlers.
-    const THREE = await import("/node_modules/three/build/three.module.js");
-    const viewHeight = 41;
-    const aspect = rect.width / rect.height;
-    const camera = new THREE.OrthographicCamera(-viewHeight * aspect / 2, viewHeight * aspect / 2, viewHeight / 2, -viewHeight / 2, 0.1, 220);
-    camera.zoom = current.camera.zoom;
-    camera.position.set(current.camera.target.x + 29, 34, current.camera.target.z + 34);
-    camera.lookAt(current.camera.target.x, 0, current.camera.target.z);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
+    // Project through the actual camera, then exercise real browser gestures.
     const candidates = current.tiles.filter((tile) => tile.x >= 6 && tile.x <= 11 && tile.z >= 5 && tile.z <= 7
       && current.tiles.filter((neighbor) => Math.abs(neighbor.x - tile.x) <= 1 && Math.abs(neighbor.z - tile.z) <= 1).every((neighbor) => neighbor.type === "grass")
       && game.canBuild("road", tile.x, tile.z).ok);
-    const points = candidates.map((tile) => {
-      const position = new THREE.Vector3(tile.x * 2.4 - 20.4, 0.06, tile.z * 2.4 - 20.4).project(camera);
-      return { x: rect.left + (position.x + 1) * rect.width / 2, y: rect.top + (1 - position.y) * rect.height / 2 };
-    }).filter((point) => document.elementFromPoint(point.x, point.y) === canvas && document.elementFromPoint(point.x + 24, point.y) === canvas)
+    const points = candidates.map((tile) => game.projectTile(tile.x, tile.z))
+      .filter((point) => document.elementFromPoint(point.x, point.y) === canvas && document.elementFromPoint(point.x + 24, point.y) === canvas)
       .sort((a, b) => Math.abs(a.x - rect.width / 2) - Math.abs(b.x - rect.width / 2));
     return {
       point: points[0] || null,

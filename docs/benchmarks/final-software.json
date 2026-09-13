@@ -1,0 +1,173 @@
+{
+  "label": "final",
+  "backendRequested": "swiftshader",
+  "backend": {
+    "lost": false,
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+  },
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "sourceHashes": {
+    "src/app.js": "363ea2d4ce36ab5687e3ade71d178cc178d7b0a23b0aaf040b3719e2b3c89420",
+    "src/world-art.js": "11b8fc502d7152fab190947b2687784cca0303b17fedc49a59d7a9df9dac08dc",
+    "src/art-batch.js": "d45e8cdd0682de9ea25ce822e822c4770fd5c7fa7cf165f824646e74ec6678c5",
+    "src/neighborhoods.js": "705573aa0c82292e4e23fa4fbdb54fae313a125d17c6608bd7a68ff6ccad75ed"
+  },
+  "sourceChangedDuringProbe": [],
+  "pageErrors": [],
+  "ok": true,
+  "testMode": true,
+  "preserveDrawingBuffer": true,
+  "metricNotes": "Single serial Chromium page. TaskDuration is page main-thread time, not whole-machine CPU. Heap is an end-of-window snapshot without forced GC. Both runs use the same software renderer and test-only preserved drawing buffer; values are rounded to two decimals.",
+  "sourceHashBasis": "Working-tree byte hashes recorded at probe start and rechecked after all samples.",
+  "samples": [
+    {
+      "town": "harbor",
+      "mode": "eco",
+      "buildings": 5,
+      "residents": 20,
+      "seconds": 3.27,
+      "fps": 24.17,
+      "frameIntervalP50Ms": 43.8,
+      "frameIntervalP95Ms": 53.5,
+      "frameCpuP50Ms": 0.4,
+      "frameCpuP95Ms": 0.9,
+      "mainThreadMsPerSecond": 22.86,
+      "scriptMsPerSecond": 13.52,
+      "layoutMsPerSecond": 0,
+      "styleMsPerSecond": 0,
+      "heapMB": 8.41,
+      "longTasks": [],
+      "rendering": {
+        "calls": 21,
+        "triangles": 14822,
+        "geometries": 21,
+        "textures": 1,
+        "targetFps": 24,
+        "pixelRatio": 1
+      },
+      "art": {
+        "sceneryMeshes": 11,
+        "buildingTemplates": 5,
+        "decoratedBuildings": 5,
+        "buildingMeshes": 5
+      }
+    },
+    {
+      "town": "harbor",
+      "mode": "balanced",
+      "buildings": 5,
+      "residents": 28,
+      "seconds": 3.25,
+      "fps": 29.85,
+      "frameIntervalP50Ms": 33.4,
+      "frameIntervalP95Ms": 48.4,
+      "frameCpuP50Ms": 0.4,
+      "frameCpuP95Ms": 1,
+      "mainThreadMsPerSecond": 46.33,
+      "scriptMsPerSecond": 26.71,
+      "layoutMsPerSecond": 1.99,
+      "styleMsPerSecond": 0.63,
+      "heapMB": 13.12,
+      "longTasks": [],
+      "recomputeMs": [
+        0.6,
+        0.7,
+        1.2,
+        0.7,
+        0.6
+      ],
+      "rendering": {
+        "calls": 21,
+        "triangles": 15462,
+        "geometries": 21,
+        "textures": 1,
+        "targetFps": 30,
+        "pixelRatio": 1
+      },
+      "art": {
+        "sceneryMeshes": 11,
+        "buildingTemplates": 5,
+        "decoratedBuildings": 5,
+        "buildingMeshes": 5
+      }
+    },
+    {
+      "town": "dense",
+      "mode": "eco",
+      "buildings": 165,
+      "residents": 1052,
+      "seconds": 3.36,
+      "fps": 21.71,
+      "frameIntervalP50Ms": 49,
+      "frameIntervalP95Ms": 58,
+      "frameCpuP50Ms": 1.1,
+      "frameCpuP95Ms": 2.2,
+      "mainThreadMsPerSecond": 68.55,
+      "scriptMsPerSecond": 60.39,
+      "layoutMsPerSecond": 0.18,
+      "styleMsPerSecond": 0.07,
+      "heapMB": 15.22,
+      "longTasks": [
+        118
+      ],
+      "rendering": {
+        "calls": 195,
+        "triangles": 66432,
+        "geometries": 70,
+        "textures": 2,
+        "targetFps": 24,
+        "pixelRatio": 1
+      },
+      "art": {
+        "sceneryMeshes": 11,
+        "buildingTemplates": 40,
+        "decoratedBuildings": 165,
+        "buildingMeshes": 165
+      }
+    },
+    {
+      "town": "dense",
+      "mode": "balanced",
+      "buildings": 165,
+      "residents": 1024,
+      "seconds": 3.35,
+      "fps": 19.12,
+      "frameIntervalP50Ms": 50.4,
+      "frameIntervalP95Ms": 58.9,
+      "frameCpuP50Ms": 1.1,
+      "frameCpuP95Ms": 1.9,
+      "mainThreadMsPerSecond": 60.44,
+      "scriptMsPerSecond": 55.43,
+      "layoutMsPerSecond": 0.19,
+      "styleMsPerSecond": 0.07,
+      "heapMB": 11.08,
+      "longTasks": [
+        116
+      ],
+      "recomputeMs": [
+        4.8,
+        4.4,
+        4,
+        3.8,
+        4.1
+      ],
+      "rendering": {
+        "calls": 185,
+        "triangles": 65632,
+        "geometries": 60,
+        "textures": 2,
+        "targetFps": 30,
+        "pixelRatio": 1
+      },
+      "art": {
+        "sceneryMeshes": 11,
+        "buildingTemplates": 40,
+        "decoratedBuildings": 165,
+        "buildingMeshes": 165
+      }
+    }
+  ]
+}

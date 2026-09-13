@@ -3,10 +3,16 @@ import { ASSET_MANIFEST, assetManifestSummary } from "./asset-manifest.js";
 import { createDemoController, normalizeDemoState, demoEconomy, demoUnlock } from "./demo.js";
 import { createWorldArt } from "./world-art.js";
 import { createTownLife, normalizeTownLife, townLifeEffects } from "./town-life.js";
+import { createNeighborhoods, normalizeNeighborhoods } from "./neighborhoods.js";
+import { createCreativeControls } from "./creative-controls.js";
 
 let demoController = null;
 let worldArt = null;
 let townLife = null;
+let neighborhoods = null;
+let creativeControls = null;
+let layoutRevision = 0;
+let lastNeighborhoodFocus = null;
 let lifeEffects = townLifeEffects(null);
 let graphicsLost = false;
 let viewMode = 'normal';
@@ -14,14 +20,19 @@ let pointerOnMap = false;
 let ghost = null;
 let ghostType = null;
 const PERFORMANCE_MODES = { eco: { fps: 24, resolution: 1 }, balanced: { fps: 30, resolution: 1.25 }, smooth: { fps: 60, resolution: 1.5 } };
-const frameStats = { frames: 0, cpuMs: 0, targetFps: 24, hidden: false };
+const DEFAULT_PERFORMANCE = 'balanced';
+const frameStats = { frames: 0, cpuMs: 0, simulationMs: 0, targetFps: 30, hidden: false };
+let renderLoopReady = false;
+let frameExecuting = false;
+let interactionUntil = 0;
+let computationLookup = null;
 
 const GRID_SIZE = 18;
 const TILE_SIZE = 2.4;
 const WEEK_SECONDS = 4;
 const INITIAL_MONEY = 50000;
 const MAX_VISUAL_AGENTS = 60;
-const GAME_VERSION = "1.0.0-demo.3";
+const GAME_VERSION = "1.0.0-demo.4";
 const SAVE_VERSION = 3;
 const SAVE_KEY = "sunny-town-story.save.v1";
 const AUTO_SAVE_INTERVAL_WEEKS = 4;
@@ -697,6 +708,7 @@ const els = {
 
 const city = {
   demo: null,
+  neighborhoods: normalizeNeighborhoods(),
   tiles: Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => ({
     x: index % GRID_SIZE,
     z: Math.floor(index / GRID_SIZE),
@@ -744,7 +756,7 @@ const city = {
   upgradeCount: 0,
   undoStack: [],
   settings: {
-    performance: 'eco',
+    performance: DEFAULT_PERFORMANCE,
     muted: false,
     volume: 0.45,
     music: true,
@@ -800,11 +812,11 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: fals
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa8ddff);
-scene.fog = new THREE.Fog(0xd9e9dc, 70, 155);
+scene.fog = new THREE.Fog(0xc2e7e5, 110, 210);
 
 const camera = new THREE.OrthographicCamera(-32, 32, 20, -20, 0.1, 220);
 camera.position.set(29, 34, 34);
@@ -814,6 +826,8 @@ const world = new THREE.Group();
 scene.add(world);
 
 const raycaster = new THREE.Raycaster();
+const pickingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.06);
+const pickingPoint = new THREE.Vector3();
 const pointer = new THREE.Vector2();
 const drag = { active: false, moved: false, x: 0, y: 0 };
 const cameraTarget = new THREE.Vector3(0, 0, 0);
@@ -822,10 +836,10 @@ let audioContext = null;
 let musicTimer = null;
 let musicStep = 0;
 
-const sun = new THREE.DirectionalLight(0xffedcf, 2.1);
+const sun = new THREE.DirectionalLight(0xfff8ed, 1.6);
 sun.position.set(-20, 42, 18);
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xe6f5ec, 0x8aa891, 1.25));
+scene.add(new THREE.HemisphereLight(0xeef5f3, 0x8b9b85, 1.05));
 
 const tileGroup = new THREE.Group();
 const roadGroup = new THREE.Group();
@@ -836,9 +850,9 @@ const effectGroup = new THREE.Group();
 const heatmapGroup = new THREE.Group();
 world.add(tileGroup, roadGroup, buildingGroup, decoGroup, agentGroup, effectGroup, heatmapGroup);
 
-const tileGeometry = new THREE.BoxGeometry(TILE_SIZE * 0.993, 0.12, TILE_SIZE * 0.993);
+const tileGeometry = new THREE.BoxGeometry(TILE_SIZE, 0.12, TILE_SIZE);
 const grassMaterials = [
-  new THREE.MeshStandardMaterial({ color: 0x9cba81, roughness: 0.95 }),
+  new THREE.MeshLambertMaterial({ color: 0x9bbd94 }),
   new THREE.MeshStandardMaterial({ color: 0x9fbc85, roughness: 0.95 }),
   new THREE.MeshStandardMaterial({ color: 0x99b77f, roughness: 0.95 }),
 ];
@@ -846,10 +860,9 @@ const roadMaterials = {
   lane: new THREE.MeshStandardMaterial({ color: ROAD_TIERS.lane.color, roughness: 0.86 }),
   avenue: new THREE.MeshStandardMaterial({ color: ROAD_TIERS.avenue.color, roughness: 0.78 }),
 };
-const pixelTextures = {};
-const textureLoader = new THREE.TextureLoader();
 const assetRuntime = {
-  textureMode: ASSET_MANIFEST.textureMode,
+  textureMode: 'vertex-colors',
+  modelStyle: 'coastal-lowpoly',
   loadedTextures: 0,
   failedTextures: 0,
   fallbackTextures: 0,
@@ -857,9 +870,54 @@ const assetRuntime = {
 const congestionMaterial = new THREE.MeshBasicMaterial({ color: 0xff8e72, transparent: true, opacity: 0.34 });
 const hoverMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
 const invalidMaterial = new THREE.MeshBasicMaterial({ color: 0xff7b7b, transparent: true, opacity: 0.42 });
+const previewMaterial = new THREE.MeshBasicMaterial({ color: 0x73bd9c, transparent: true, opacity: 0.5, depthWrite: false });
+previewMaterial.userData.persistent = true;
 const constructionMaterial = new THREE.MeshStandardMaterial({ color: 0xffd36f, roughness: 0.55, emissive: 0x8c4b12, emissiveIntensity: 0.06 });
 const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd36f, roughness: 0.38, metalness: 0.12, emissive: 0x8b5b00, emissiveIntensity: 0.08 });
 const heartMaterial = new THREE.MeshStandardMaterial({ color: 0xff8cad, roughness: 0.52, emissive: 0x7d2442, emissiveIntensity: 0.1 });
+
+
+const batchTransform = new THREE.Object3D();
+const batchColor = new THREE.Color();
+function createBatch(geometry, material, capacity, parent) {
+  geometry.userData.persistent = true;
+  material.userData.persistent = true;
+  const batch = new THREE.InstancedMesh(geometry, material, capacity);
+  batch.count = 0;
+  batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  batch.frustumCulled = false;
+  batch.matrixAutoUpdate = false;
+  parent.add(batch);
+  return batch;
+}
+function putInstance(batch, index, x, y, z, sx = 1, sy = 1, sz = 1, rotation = 0) {
+  batchTransform.position.set(x, y, z);
+  batchTransform.scale.set(sx, sy, sz);
+  batchTransform.rotation.set(0, rotation, 0);
+  batchTransform.updateMatrix();
+  batch.setMatrixAt(index, batchTransform.matrix);
+}
+function finishBatch(batch, count) {
+  batch.count = count;
+  batch.visible = count > 0;
+  batch.instanceMatrix.needsUpdate = true;
+  if (batch.instanceColor) batch.instanceColor.needsUpdate = true;
+}
+const roadBatches = {
+  lane: createBatch(new THREE.BoxGeometry(1, 1, 1), roadMaterials.lane, GRID_SIZE * GRID_SIZE * 5, roadGroup),
+  avenue: createBatch(new THREE.BoxGeometry(1, 1, 1), roadMaterials.avenue, GRID_SIZE * GRID_SIZE * 5, roadGroup),
+  stripe: createBatch(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xfff6df }), GRID_SIZE * GRID_SIZE, roadGroup),
+};
+const congestionBatch = createBatch(new THREE.BoxGeometry(1.28, 0.04, 1.28), congestionMaterial, GRID_SIZE * GRID_SIZE, roadGroup);
+const heatmapBatch = createBatch(new THREE.BoxGeometry(TILE_SIZE * 0.94, 0.015, TILE_SIZE * 0.94), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.52, depthWrite: false }), GRID_SIZE * GRID_SIZE, heatmapGroup);
+const agentBatches = {
+  car: createBatch(new THREE.BoxGeometry(0.52, 0.22, 0.34), new THREE.MeshLambertMaterial({ color: 0xffffff }), MAX_VISUAL_AGENTS, agentGroup),
+  roof: createBatch(new THREE.BoxGeometry(0.28, 0.16, 0.26), new THREE.MeshLambertMaterial({ color: 0xfff8e8 }), MAX_VISUAL_AGENTS, agentGroup),
+  walker: createBatch(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }), MAX_VISUAL_AGENTS, agentGroup),
+};
+let roadBatchVersion = -1;
+let heatmapDirty = true;
+let heatmapLastMode = null;
 
 const hoverMesh = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE, 0.16, TILE_SIZE), hoverMaterial);
 hoverMesh.position.y = 0.12;
@@ -869,6 +927,17 @@ const radiusPreview = new THREE.Mesh(new THREE.RingGeometry(0.98, 1, 64), new TH
 radiusPreview.rotation.x = -Math.PI / 2;
 radiusPreview.visible = false;
 scene.add(radiusPreview);
+// The diamond follows the same Manhattan distance used by neighborhood rules.
+// It is a single persistent outline, updated only when the layout or focus changes.
+const neighborhoodOutline = new THREE.LineLoop(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0),
+  ]),
+  new THREE.LineBasicMaterial({ color: 0x307e75, transparent: true, opacity: 0.8, depthWrite: false }),
+);
+neighborhoodOutline.visible = false;
+scene.add(neighborhoodOutline);
 const placementHint = document.createElement('div');
 placementHint.className = 'placement-hint';
 placementHint.hidden = true;
@@ -882,34 +951,28 @@ function setViewMode(mode) {
   });
   heatmapGroup.visible = viewMode !== 'normal';
   updateHeatmap();
+  requestRender();
 }
 
 function updateHeatmap() {
-  if (viewMode === 'normal') return;
-  if (!heatmapGroup.children.length && city.tiles[0]?.mesh) {
-    const geometry = new THREE.PlaneGeometry(TILE_SIZE * 0.94, TILE_SIZE * 0.94);
-    geometry.userData.persistent = true;
-    city.tiles.forEach((tile) => {
-      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.52, depthWrite: false, side: THREE.DoubleSide }));
-      const position = gridToWorld(tile.x, tile.z);
-      mesh.position.set(position.x, 0.27, position.z);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.userData.tile = tile;
-      heatmapGroup.add(mesh);
-    });
-  }
-  heatmapGroup.children.forEach((mesh) => {
-    const tile = mesh.userData.tile;
-    mesh.visible = viewMode === 'services' || tile.road;
+  if (viewMode === 'normal' || (!heatmapDirty && heatmapLastMode === viewMode)) return;
+  let count = 0;
+  for (const tile of city.tiles) {
+    if (viewMode === 'traffic' && !tile.road) continue;
+    const position = gridToWorld(tile.x, tile.z);
+    putInstance(heatmapBatch, count, position.x, 0.27, position.z);
     const health = viewMode === 'traffic' ? 1 - clamp(tile.congestion, 0, 1) : ((tile.coverage.power || 0) + (tile.coverage.water || 0)) / 2;
-    mesh.material.color.setHex(health > 0.7 ? 0x49bc95 : health > 0.35 ? 0xf5c96a : 0xe98372);
-  });
+    heatmapBatch.setColorAt(count++, batchColor.setHex(health > 0.7 ? 0x49bc95 : health > 0.35 ? 0xf5c96a : 0xe98372));
+  }
+  finishBatch(heatmapBatch, count);
+  heatmapDirty = false;
+  heatmapLastMode = viewMode;
 }
 
 function disposeLocalObject(object) {
   if (!object) return;
   worldArt?.releaseBuilding(object);
-  const persistent = new Set([...Object.values(pixelTextures), ...Object.values(roadMaterials), ...grassMaterials, tileGeometry]);
+  const persistent = new Set([...Object.values(roadMaterials), ...grassMaterials, tileGeometry]);
   const geometries = new Set(), materials = new Set(), textures = new Set();
   object.traverse((mesh) => {
     if (mesh.geometry && !mesh.geometry.userData.artSharedResource && !mesh.geometry.userData.persistent && !persistent.has(mesh.geometry)) geometries.add(mesh.geometry);
@@ -925,48 +988,6 @@ function disposeLocalObject(object) {
   object.removeFromParent();
 }
 
-const cloudGroup = new THREE.Group();
-scene.add(cloudGroup);
-const petalGroup = new THREE.Group();
-scene.add(petalGroup);
-
-function makeCloud(x, y, z, scale) {
-  const cloud = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82 });
-  [0, 0.8, -0.8].forEach((offset, index) => {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.85 + index * 0.12, 16, 10), mat);
-    puff.position.set(offset, Math.sin(index) * 0.15, 0);
-    cloud.add(puff);
-  });
-  cloud.position.set(x, y, z);
-  cloud.scale.setScalar(scale);
-  cloudGroup.add(cloud);
-}
-
-makeCloud(-21, 18, -18, 1.8);
-makeCloud(14, 22, -23, 1.35);
-makeCloud(26, 16, 12, 1.55);
-
-function createPetals() {
-  const petalGeometry = new THREE.PlaneGeometry(0.16, 0.09);
-  const petalMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffb7ce,
-    transparent: true,
-    opacity: 0.72,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  for (let i = 0; i < 90; i += 1) {
-    const petal = new THREE.Mesh(petalGeometry, petalMaterial.clone());
-    petal.userData.seed = Math.random() * Math.PI * 2;
-    petal.userData.speed = 0.55 + Math.random() * 0.7;
-    petal.userData.drift = 0.25 + Math.random() * 0.55;
-    petal.position.set(Math.random() * 62 - 31, 3 + Math.random() * 18, Math.random() * 54 - 27);
-    petal.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    petalGroup.add(petal);
-  }
-}
-
 function createTiles() {
   const mesh = new THREE.InstancedMesh(tileGeometry, grassMaterials[0], city.tiles.length);
   const transform = new THREE.Object3D();
@@ -975,29 +996,13 @@ function createTiles() {
     transform.position.set(x, 0, z);
     transform.updateMatrix();
     mesh.setMatrixAt(index, transform.matrix);
-    mesh.setColorAt(index, new THREE.Color((tile.x + tile.z) % 3 === 0 ? 0xffffff : 0xf8fcf3));
+    mesh.setColorAt(index, new THREE.Color(0xffffff));
     tile.mesh = mesh;
   });
   mesh.instanceMatrix.needsUpdate = true;
   tileGroup.add(mesh);
 
   // World-art owns deterministic vegetation outside the buildable grid.
-}
-
-function makeTree(x, z, cherry = false) {
-  const { x: wx, z: wz } = gridToWorld(x, z);
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.09, 0.13, 0.55, 8),
-    new THREE.MeshStandardMaterial({ color: 0x9f7a52, roughness: 0.8 }),
-  );
-  const crown = new THREE.Mesh(
-    new THREE.SphereGeometry(0.46, 14, 10),
-    new THREE.MeshStandardMaterial({ color: cherry ? 0xffb7ce : 0x79c86b, roughness: 0.8 }),
-  );
-  trunk.position.set(wx, 0.38, wz);
-  crown.position.set(wx, 0.88, wz);
-  crown.userData.sway = Math.random() * Math.PI * 2;
-  decoGroup.add(trunk, crown);
 }
 
 function getTile(x, z) {
@@ -1034,7 +1039,7 @@ function bestAdjacentRoadTier(building) {
 }
 
 function buildingById(id) {
-  return city.buildings.find((building) => building.id === id);
+  return computationLookup ? computationLookup.byId.get(id) : city.buildings.find((building) => building.id === id);
 }
 
 function refreshRoadMasks() {
@@ -1050,49 +1055,24 @@ function refreshRoadMasks() {
   });
 }
 
-function createRoadMesh(tile) {
-  const signature = `${tile.roadTier}:${tile.roadMask}`;
-  if (tile.road && tile.roadMesh?.userData.signature === signature) return;
-  if (tile.roadMesh) disposeLocalObject(tile.roadMesh);
-  if (!tile.road) {
-    tile.roadMesh = null;
-    return;
-  }
-
-  const group = new THREE.Group();
-  const material = roadMaterials[tile.roadTier];
-  const width = tile.roadTier === "avenue" ? 1.15 : 0.82;
-  const center = new THREE.Mesh(new THREE.BoxGeometry(width, 0.09, width), material);
-  center.position.y = 0.11;
-  group.add(center);
-
-  roadNeighbors(tile).forEach(({ dir }) => {
-    const horizontal = dir.dx !== 0;
-    const segment = new THREE.Mesh(
-      new THREE.BoxGeometry(horizontal ? TILE_SIZE : width, 0.08, horizontal ? width : TILE_SIZE),
-      material,
-    );
-    segment.position.set((dir.dx * TILE_SIZE) / 4, 0.1, (dir.dz * TILE_SIZE) / 4);
-    group.add(segment);
-  });
-
-  if (tile.roadTier === "avenue") {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(width * 0.16, 0.1, width * 0.16), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
-    stripe.position.y = 0.17;
-    group.add(stripe);
-  }
-
-  const { x, z } = gridToWorld(tile.x, tile.z);
-  group.position.set(x, 0, z);
-  group.userData.tile = tile;
-  group.userData.signature = signature;
-  tile.roadMesh = group;
-  roadGroup.add(group);
-}
-
 function refreshRoadMeshes() {
+  if (roadBatchVersion === city.roadVersion) return;
   refreshRoadMasks();
-  city.tiles.forEach(createRoadMesh);
+  const counts = { lane: 0, avenue: 0, stripe: 0 };
+  for (const tile of city.tiles) {
+    if (!tile.road) continue;
+    const batch = roadBatches[tile.roadTier];
+    const width = tile.roadTier === 'avenue' ? 1.15 : 0.82;
+    const { x, z } = gridToWorld(tile.x, tile.z);
+    putInstance(batch, counts[tile.roadTier]++, x, 0.11, z, width, 0.09, width);
+    for (const { dir } of roadNeighbors(tile)) {
+      putInstance(batch, counts[tile.roadTier]++, x + dir.dx * TILE_SIZE / 4, 0.1, z + dir.dz * TILE_SIZE / 4, dir.dx ? TILE_SIZE / 2 : width, 0.08, dir.dz ? TILE_SIZE / 2 : width);
+    }
+    if (tile.roadTier === 'avenue') putInstance(roadBatches.stripe, counts.stripe++, x, 0.17, z, width * 0.16, 0.1, width * 0.16);
+  }
+  for (const [kind, batch] of Object.entries(roadBatches)) finishBatch(batch, counts[kind]);
+  roadBatchVersion = city.roadVersion;
+  heatmapDirty = true;
 }
 
 function invalidateRoadNetwork() {
@@ -1115,155 +1095,9 @@ function createRoof(width, depth, color) {
   return roof;
 }
 
-function configurePixelTexture(texture) {
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  if (texture.image) texture.needsUpdate = true;
-  return texture;
-}
-
-function makeFallbackTexture(type) {
-  const palette = ASSET_MANIFEST.textures[type]?.palette || ["#ffffff", "#e5e5e5", "#cccccc", "#999999"];
-  const canvas = document.createElement("canvas");
-  canvas.width = ASSET_MANIFEST.textureSize;
-  canvas.height = ASSET_MANIFEST.textureSize;
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = palette[0];
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < canvas.height; y += 4) {
-    for (let x = 0; x < canvas.width; x += 4) {
-      const index = Math.abs((x * 3 + y * 5 + type.length) % palette.length);
-      ctx.fillStyle = palette[index];
-      ctx.fillRect(x, y, 4, 4);
-    }
-  }
-  ctx.fillStyle = palette[3] || "#ffffff";
-  for (let x = 2; x < canvas.width; x += 6) ctx.fillRect(x, 5, 2, 3);
-  assetRuntime.fallbackTextures += 1;
-  return configurePixelTexture(new THREE.CanvasTexture(canvas));
-}
-
-function preloadManifestTextures() {
-  Object.entries(ASSET_MANIFEST.textures).forEach(([type, asset]) => {
-    if (!asset.path) return;
-    const texture = textureLoader.load(
-      asset.path,
-      () => {
-        assetRuntime.loadedTextures += 1;
-      },
-      undefined,
-      () => {
-        assetRuntime.failedTextures += 1;
-        pixelTextures[type] = makeFallbackTexture(type);
-      },
-    );
-    pixelTextures[type] = configurePixelTexture(texture);
-  });
-}
-
-function makePixelTexture(type) {
-  if (pixelTextures[type]) return pixelTextures[type];
-  pixelTextures[type] = makeFallbackTexture(type);
-  return pixelTextures[type];
-}
-
-function buildingMaterial(type, color) {
-  return new THREE.MeshStandardMaterial({
-    color,
-    map: makePixelTexture(type),
-    roughness: 0.78,
-  });
-}
-
 function createBuildingMesh(type) {
-  const config = BUILDINGS[type];
   const group = new THREE.Group();
-  const baseColor = config.color;
-
-  if (type === "park") {
-    const mound = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.92, 0.22, 16), buildingMaterial(type, 0x91db7b));
-    mound.position.y = 0.18;
-    group.add(mound);
-    for (let i = 0; i < 4; i += 1) {
-      const tree = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.26, 8), new THREE.MeshStandardMaterial({ color: 0x9b7046 }));
-      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), new THREE.MeshStandardMaterial({ color: i % 2 ? 0xffb4ca : 0x69bf68 }));
-      trunk.position.y = 0.31;
-      crown.position.y = 0.53;
-      tree.position.set(i % 2 ? 0.28 : -0.28, 0, i < 2 ? 0.25 : -0.25);
-      tree.add(trunk, crown);
-      group.add(tree);
-    }
-    return group;
-  }
-
-  if (type === "water") {
-    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 12), buildingMaterial(type, baseColor));
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 12), new THREE.MeshStandardMaterial({ color: 0x8db7cf }));
-    tank.position.y = 1.15;
-    stem.position.y = 0.58;
-    group.add(stem, tank);
-    return group;
-  }
-
-  if (type === "power") {
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.48, 1.2, 12), buildingMaterial(type, baseColor));
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 8), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffd66d, emissiveIntensity: 0.35 }));
-    body.position.y = 0.68;
-    cap.position.y = 1.42;
-    group.add(body, cap);
-    return group;
-  }
-
-  const height = buildingHeight(type);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.22, height, 1.16), buildingMaterial(type, baseColor));
-  body.position.y = height / 2 + 0.08;
-  group.add(body);
-  const roofColor = type === "industrial" ? 0x7d9cab : type === "fire" ? 0xe96767 : type === "school" ? 0xf09b50 : 0xf58cab;
-  const roof = createRoof(1.3, 1.2, roofColor);
-  roof.position.y = height + 0.36;
-  group.add(roof);
-
-  if (type === "commercial") {
-    const awning = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.12, 0.18), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-    awning.position.set(0, 0.55, 0.68);
-    group.add(awning);
-  }
-
-  if (type === "plaza") {
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.96, 0.18, 8), buildingMaterial(type, baseColor));
-    base.position.y = 0.17;
-    const fountain = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.18, 16), new THREE.MeshStandardMaterial({ color: 0x84c9ff, roughness: 0.42, emissive: 0x245577, emissiveIntensity: 0.08 }));
-    fountain.position.y = 0.36;
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.82, 0.08), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
-    flag.position.set(-0.42, 0.66, -0.32);
-    group.add(base, fountain, flag);
-    return group;
-  }
-
-  if (type === "station") {
-    const platform = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 0.78), buildingMaterial(type, baseColor));
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.16, 0.86), new THREE.MeshStandardMaterial({ color: 0x5d8ca8, roughness: 0.7 }));
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.3, 0.08), new THREE.MeshStandardMaterial({ color: 0xfff4c0, roughness: 0.55 }));
-    platform.position.y = 0.18;
-    roof.position.y = 0.9;
-    sign.position.set(0, 0.62, 0.45);
-    group.add(platform, roof, sign);
-    return group;
-  }
-
-  if (type === "lantern") {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.25, 8), new THREE.MeshStandardMaterial({ color: 0x7b5650, roughness: 0.72 }));
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.4, emissive: 0xff7a5e, emissiveIntensity: 0.28 }));
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.16, 10), buildingMaterial(type, 0xffe0ba));
-    base.position.y = 0.16;
-    pole.position.y = 0.68;
-    lamp.position.y = 1.28;
-    group.add(base, pole, lamp);
-    return group;
-  }
+  group.userData.buildingType = type;
   return group;
 }
 
@@ -1272,45 +1106,9 @@ function setBuildingLevelVisual(building) {
   const level = buildingLevel(building);
   building.mesh.userData.level = level;
   building.mesh.scale.setScalar(1 + (level - 1) * 0.12);
-  let upgradeCrown = building.mesh.userData.upgradeCrown;
-  if (!upgradeCrown) {
-    upgradeCrown = new THREE.Group();
-    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xfff2a8, emissive: 0xffb85f, emissiveIntensity: 0.12, roughness: 0.48 });
-    const left = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), trimMaterial);
-    const right = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), trimMaterial);
-    const center = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.16), trimMaterial);
-    left.position.set(-0.36, 0, 0);
-    right.position.set(0.36, 0, 0);
-    center.position.set(0, 0.02, 0);
-    upgradeCrown.add(left, right, center);
-    upgradeCrown.position.set(0, buildingHeight(building.type) + 0.78, 0.42);
-    building.mesh.add(upgradeCrown);
-    building.mesh.userData.upgradeCrown = upgradeCrown;
-  }
-  upgradeCrown.visible = level > 1 && !BUILDINGS[building.type]?.landmark;
-  upgradeCrown.scale.set(1 + (level - 2) * 0.24, 1 + (level - 2) * 0.18, 1);
-
-  let extraFloor = building.mesh.userData.extraFloor;
-  if (!extraFloor && level >= 3 && !BUILDINGS[building.type]?.landmark) {
-    extraFloor = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.34, 0.86), buildingMaterial(building.type, BUILDINGS[building.type].color));
-    extraFloor.position.y = buildingHeight(building.type) + 0.42;
-    building.mesh.add(extraFloor);
-    building.mesh.userData.extraFloor = extraFloor;
-  }
-  if (extraFloor) extraFloor.visible = level >= 3;
-  let badge = building.mesh.userData.badge;
-  if (!badge) {
-    badge = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.24, 0.24, 0.07, 6),
-      new THREE.MeshStandardMaterial({ color: 0xfff2a8, emissive: 0xffb85f, emissiveIntensity: 0.18 }),
-    );
-    badge.position.set(0.52, buildingHeight(building.type) + 0.8, -0.48);
-    building.mesh.add(badge);
-    building.mesh.userData.badge = badge;
-  }
-  badge.visible = level > 1;
-  badge.scale.setScalar(0.8 + level * 0.16);
   worldArt?.decorateBuilding(building.mesh, building.type, building.x, building.z, level);
+  building.mesh.updateMatrix();
+  building.mesh.matrixAutoUpdate = false;
 }
 
 function canBuild(type, tile) {
@@ -1420,6 +1218,7 @@ function serializeGame() {
       population: city.stats.population,
       demo: city.demo ? JSON.parse(JSON.stringify(city.demo)) : null,
       life: JSON.parse(JSON.stringify(city.life || normalizeTownLife())),
+      neighborhoods: normalizeNeighborhoods(city.neighborhoods),
       money: city.stats.money,
       chapterIndex: city.chapterIndex,
       completedChapters: [...city.completedChapters],
@@ -1479,7 +1278,12 @@ function clearCityContent() {
       tile.roadMesh = null;
     }
   });
-  [...buildingGroup.children, ...agentGroup.children, ...effectGroup.children].forEach(disposeLocalObject);
+  [...buildingGroup.children, ...effectGroup.children].forEach(disposeLocalObject);
+  Object.values(agentBatches).forEach(batch => finishBatch(batch, 0));
+  Object.values(roadBatches).forEach(batch => finishBatch(batch, 0));
+  finishBatch(congestionBatch, 0);
+  roadBatchVersion = -1;
+  heatmapDirty = true;
   city.buildings = [];
   city.residents = [];
   city.visualAgents = [];
@@ -1524,6 +1328,7 @@ function applySave(save) {
   const migrated = migrateSave(save);
   if (!migrated) return false;
   const data = migrated.city || {};
+  creativeControls?.exit();
   clearCityContent();
   city.week = Math.max(1, data.week || 1);
   city.weekProgress = 0;
@@ -1531,6 +1336,8 @@ function applySave(save) {
   city.stats.population = clamp(Number.isFinite(data.population) ? data.population : 0, 0, 25000);
   city.demo = normalizeDemoState(data.demo);
   city.life = normalizeTownLife(data.life);
+  city.neighborhoods = normalizeNeighborhoods(data.neighborhoods);
+  lastNeighborhoodFocus = null;
   city.chapterIndex = clamp(data.chapterIndex || 0, 0, CHAPTERS.length - 1);
   city.completedChapters = Array.isArray(data.completedChapters) ? [...new Set(data.completedChapters.filter(i => Number.isInteger(i) && i >= 0 && i < CHAPTERS.length))] : [];
   city.activeEvents = Array.isArray(data.activeEvents) ? data.activeEvents.filter((event) => EVENT_DEFINITIONS.some((d) => d.id === event?.id)).map((event) => ({ id: event.id, weeksLeft: clamp(Number(event.weeksLeft) || 1, 1, 30) })) : [];
@@ -1547,7 +1354,7 @@ function applySave(save) {
   city.upgradeCount = data.upgradeCount || 0;
   city.undoStack = [];
   city.settings = {
-    performance: Object.hasOwn(PERFORMANCE_MODES, data.settings?.performance) ? data.settings.performance : 'eco',
+    performance: Object.hasOwn(PERFORMANCE_MODES, data.settings?.performance) ? data.settings.performance : DEFAULT_PERFORMANCE,
     muted: Boolean(data.settings?.muted),
     volume: clamp(Number.isFinite(data.settings?.volume) ? data.settings.volume : city.settings.volume, 0, 1),
     music: data.settings?.music !== false,
@@ -1644,7 +1451,7 @@ function loadGameFromStorage() {
 
 function updateSettings(partial) {
   city.settings = { ...city.settings, ...partial };
-  if (!Object.hasOwn(PERFORMANCE_MODES, city.settings.performance)) city.settings.performance = 'eco';
+  if (!Object.hasOwn(PERFORMANCE_MODES, city.settings.performance)) city.settings.performance = DEFAULT_PERFORMANCE;
   const resolution = Math.min(window.devicePixelRatio, PERFORMANCE_MODES[city.settings.performance].resolution);
   if (renderer.getPixelRatio() !== resolution) renderer.setPixelRatio(resolution);
   city.settings.volume = clamp(city.settings.volume, 0, 1);
@@ -1673,6 +1480,7 @@ function clampCameraTarget() {
 function setCameraZoom(value) {
   camera.zoom = clamp(value, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
   camera.updateProjectionMatrix();
+  requestRender(true);
 }
 
 function zoomCamera(direction) {
@@ -1715,8 +1523,11 @@ function undoLastAction() {
 }
 
 function resetMetaState() {
+  creativeControls?.exit();
   city.demo = null;
   city.life = normalizeTownLife();
+  city.neighborhoods = normalizeNeighborhoods();
+  lastNeighborhoodFocus = null;
   city.selectedTool = "road";
   city.selectedRoadTier = "lane";
   city.selectedTile = null;
@@ -1883,6 +1694,7 @@ function spawnChapterCelebration(title) {
 }
 
 function place(type, x, z, options = {}) {
+  if (creativeControls?.isActive()) return false;
   const tile = getTile(x, z);
   const previousTier = city.selectedRoadTier;
   if (options.tier) city.selectedRoadTier = options.tier;
@@ -2106,9 +1918,10 @@ function spreadCoverage() {
       });
     }
     if (config.pollution) {
+      const pollutionStrength = buildingValue(building, "pollution");
       city.tiles.forEach((tile) => {
         const reach = Math.max(0, 4 - distance(building, tile));
-        tile.pollution += reach * buildingValue(building, "pollution");
+        tile.pollution += reach * pollutionStrength;
       });
     }
   });
@@ -2122,8 +1935,11 @@ function spreadCoverage() {
 }
 
 function nearestRoadForBuilding(building) {
+  if (computationLookup?.roads.has(building.id)) return computationLookup.roads.get(building.id);
   const tile = getTile(building.x, building.z);
-  return adjacentRoads(tile).sort((a, b) => ROAD_TIERS[b.roadTier].capacity - ROAD_TIERS[a.roadTier].capacity)[0] || null;
+  const road = adjacentRoads(tile).sort((a, b) => ROAD_TIERS[b.roadTier].capacity - ROAD_TIERS[a.roadTier].capacity)[0] || null;
+  computationLookup?.roads.set(building.id, road);
+  return road;
 }
 
 function pathKey(start, end) {
@@ -2238,6 +2054,10 @@ function updateTrafficStats() {
 }
 
 function computeStats({ growPopulation = false } = {}) {
+  const computationStarted = performance.now();
+  layoutRevision += 1;
+  computationLookup = { byId: new Map(city.buildings.map(building => [building.id, building])), roads: new Map() };
+  heatmapDirty = true;
   lifeEffects = townLifeEffects(city.life);
   spreadCoverage();
   refreshRoadMasks();
@@ -2317,7 +2137,8 @@ function computeStats({ growPopulation = false } = {}) {
   const roadMaintenance = roads.reduce((sum, tile) => sum + ROAD_TIERS[tile.roadTier].maintenance, 0);
   const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + buildingValue(building, "maintenance"), 0);
   const demoPolicy = demoEconomy(city.demo);
-  const adjustedIncome = (income * impact.incomeMultiplier + impact.incomeDelta) * demoPolicy.income;
+  const visitorIncome = neighborhoods?.weekIncome() || 0;
+  const adjustedIncome = (income * impact.incomeMultiplier + impact.incomeDelta) * demoPolicy.income + visitorIncome;
   const adjustedMaintenance = (maintenance * lifeEffects.maintenance + impact.maintenanceDelta) * demoPolicy.maintenance + demoPolicy.upkeep;
   const fiscal = fiscalHealth({ money: city.stats.money, income: adjustedIncome, maintenance: adjustedMaintenance });
   const happinessReasons = [
@@ -2378,15 +2199,19 @@ function computeStats({ growPopulation = false } = {}) {
   city.stats.unreachableResidents = routeStats.unreachableResidents;
   city.stats.averageCommute = routeStats.averageCommute;
   city.stats.income = Math.round(adjustedIncome);
+  city.stats.visitors = visitorIncome;
   city.stats.maintenance = Math.round(adjustedMaintenance);
   city.report = {
     income: Math.round(adjustedIncome),
     maintenance: Math.round(adjustedMaintenance),
     net: Math.round(adjustedIncome - adjustedMaintenance),
-    eventImpact: Math.round(adjustedIncome - income - (adjustedMaintenance - maintenance)),
+    eventImpact: Math.round(adjustedIncome - visitorIncome - income - (adjustedMaintenance - maintenance)),
     taxes: Math.round(income),
+    visitors: visitorIncome,
     trends: city.report?.trends || { population: "→0", money: "→0", traffic: "→0", happiness: "→0" },
   };
+  computationLookup = null;
+  frameStats.simulationMs = Math.round((performance.now() - computationStarted) * 100) / 100;
   return { income: adjustedIncome, maintenance: adjustedMaintenance };
 }
 
@@ -2490,6 +2315,26 @@ function selectedDescription() {
     return { title: `${config.name} Lv.${buildingLevel(building)} (${active})`, text: `${config.hint} 关联居民/通勤 ${residents.length}。${coverageText} ${upgradeText}。` };
   }
   return { title: `草地 (${tile.x + 1}, ${tile.z + 1})`, text: "可以在这里规划新的道路或建筑。" };
+}
+
+function updateNeighborhoodFocus() {
+  if (!neighborhoods) return;
+  const result = neighborhoods.analyze();
+  const quickStatus = document.getElementById('neighborhoodQuickStatus');
+  if (quickStatus) quickStatus.textContent = result.count ? `${result.count} 种街区 · +${money(result.income)}/周` : '让邻居成为风景';
+  const focus = city.neighborhoods?.focus;
+  const district = result.districts.find(item => item.id === focus);
+  neighborhoodOutline.visible = Boolean(district?.anchor) && !creativeControls?.isActive();
+  if (district?.anchor) {
+    const position = gridToWorld(district.anchor.x, district.anchor.z);
+    neighborhoodOutline.position.set(position.x, 0.3, position.z);
+    neighborhoodOutline.scale.setScalar((focus === 'school' ? 4 : 3) * TILE_SIZE);
+    if (lastNeighborhoodFocus !== focus) {
+      cameraTarget.set(position.x, 0, position.z);
+      clampCameraTarget();
+    }
+  }
+  lastNeighborhoodFocus = focus;
 }
 
 function renderUI() {
@@ -2621,20 +2466,24 @@ function renderUI() {
         .join("")
     : "暂无成就";
   els.saveStatus.textContent = city.saveStatus;
-  els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 财政 ${Math.round(stats.fiscal?.score || 0)}% / 储备 ${Math.max(0, Math.round(stats.fiscal?.reserveWeeks || 0))} 周 / 人口 ${city.report.trends.population} / 资金 ${city.report.trends.money} / 交通 ${city.report.trends.traffic} / 幸福 ${city.report.trends.happiness}。`;
+  els.reportDetails.textContent = `收入 ${money(city.report.income)}（含游客 ${money(city.report.visitors || 0)}） / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 财政 ${Math.round(stats.fiscal?.score || 0)}% / 储备 ${Math.max(0, Math.round(stats.fiscal?.reserveWeeks || 0))} 周 / 人口 ${city.report.trends.population} / 资金 ${city.report.trends.money} / 交通 ${city.report.trends.traffic} / 幸福 ${city.report.trends.happiness}。`;
   demoController?.render();
   townLife?.render();
+  neighborhoods?.render();
+  updateNeighborhoodFocus();
   updateHeatmap();
   updateRoadCongestionVisuals();
   worldArt?.setOccupied?.(city.tiles);
   const performanceSelect = document.getElementById('performanceSelect');
   if (performanceSelect) performanceSelect.value = city.settings.performance;
-  const resolution = Math.min(window.devicePixelRatio, (PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES.eco).resolution);
+  const resolution = Math.min(window.devicePixelRatio, (PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES[DEFAULT_PERFORMANCE]).resolution);
   if (renderer.getPixelRatio() !== resolution) renderer.setPixelRatio(resolution);
+  updateHover();
+  requestRender();
 }
 
 function updateHover() {
-  if (!city.selectedTile || !pointerOnMap || demoController?.isBlocking()) {
+  if (!city.selectedTile || !pointerOnMap || demoController?.isBlocking() || creativeControls?.isActive()) {
     hoverMesh.visible = false;
     if (ghost) ghost.visible = false;
     radiusPreview.visible = false;
@@ -2649,18 +2498,24 @@ function updateHover() {
   placementHint.hidden = false;
   placementHint.classList.toggle('invalid', !check.ok);
   const config = BUILDINGS[city.selectedTool];
-  const hint = check.ok ? `${config.name} · ${money(city.selectedTool === 'road' ? ROAD_TIERS[city.selectedRoadTier].cost : config.cost || 0)}${config.radius ? ` · 覆盖 ${config.radius} 格` : ''}` : check.reason;
+  let hint = check.ok ? `${config.name} · ${money(city.selectedTool === 'road' ? ROAD_TIERS[city.selectedRoadTier].cost : config.cost || 0)}${config.radius ? ` · 覆盖 ${config.radius} 格` : ''}` : check.reason;
+  if (check.ok && city.selectedTool !== 'road') {
+    const preview = neighborhoods?.preview(city.selectedTool, city.selectedTile.x, city.selectedTile.z);
+    if (preview?.valid && preview.text) hint += ` · ${preview.text}`;
+  }
   if (placementHint.textContent !== hint) placementHint.textContent = hint;
   const showGhost = city.selectedTool !== 'road' && city.selectedTool !== 'bulldoze' && !city.selectedTile.buildingId && !city.selectedTile.road;
   if (showGhost && ghostType !== city.selectedTool) {
     if (ghost) disposeLocalObject(ghost);
     ghost = createBuildingMesh(city.selectedTool);
     ghostType = city.selectedTool;
+    ghost.userData.preview = true;
+    worldArt?.decorateBuilding(ghost, city.selectedTool, city.selectedTile.x, city.selectedTile.z, 1);
     ghost.traverse((mesh) => {
       if (!mesh.material) return;
       const old = mesh.material;
-      mesh.material = new THREE.MeshBasicMaterial({ color: 0x73bd9c, transparent: true, opacity: 0.5, depthWrite: false });
-      old.dispose();
+      mesh.material = previewMaterial;
+      if (!old.userData.artSharedResource && !old.userData.persistent) old.dispose();
     });
     scene.add(ghost);
   }
@@ -2700,29 +2555,31 @@ function setRoadTier(tier) {
   updateHover();
 }
 
-function pickTile(event) {
+function pickTile(event, includeBuildings = true) {
   const rect = canvas.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObjects(tileGroup.children, false);
-  return hits[0]?.instanceId !== undefined ? city.tiles[hits[0].instanceId] : hits[0]?.object.userData.tile || null;
-}
-
-function createAgentMesh(kind) {
-  const group = new THREE.Group();
-  if (kind === "car") {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.22, 0.34), new THREE.MeshStandardMaterial({ color: randomChoice([0xff9aa8, 0x8fc7ff, 0xffd36f, 0x9be28d]), roughness: 0.7 }));
-    const top = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.26), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
-    body.position.y = 0.36;
-    top.position.y = 0.55;
-    group.add(body, top);
-  } else {
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshStandardMaterial({ color: randomChoice([0x5aa27d, 0xff8cad, 0x67b8ff, 0xffb85f]), roughness: 0.8 }));
-    body.position.y = 0.42;
-    group.add(body);
+  if (!raycaster.ray.intersectPlane(pickingPlane, pickingPoint)) return null;
+  const half = GRID_SIZE * TILE_SIZE / 2;
+  const x = Math.floor((pickingPoint.x + half) / TILE_SIZE);
+  const z = Math.floor((pickingPoint.z + half) / TILE_SIZE);
+  if (includeBuildings && !creativeControls?.isActive() && !event.shiftKey) {
+    // A roof projects beyond its ground tile. Only nearby buildings can cover
+    // this ray: inspect at most a 7×7 neighborhood, never all town geometry.
+    const candidates = [];
+    for (let dz = -3; dz <= 3; dz += 1) for (let dx = -3; dx <= 3; dx += 1) {
+      const id = getTile(x + dx, z + dz)?.buildingId;
+      if (id) { const building = buildingById(id); if (building) candidates.push(building.mesh); }
+    }
+    const hit = raycaster.intersectObjects(candidates, true)[0];
+    if (hit) {
+      let object = hit.object;
+      while (object && !object.userData.tile) object = object.parent;
+      if (object?.userData.tile) return object.userData.tile;
+    }
   }
-  return group;
+  return getTile(x, z);
 }
 
 function refreshVisualAgents() {
@@ -2731,39 +2588,45 @@ function refreshVisualAgents() {
     .filter((resident) => resident.route?.length > 1)
     .slice(0, MAX_VISUAL_AGENTS)
     .map((resident, index) => {
-      const kind = resident.route.length > 4 ? "car" : "walker";
-      let mesh = previous[index]?.kind === kind ? previous[index].mesh : null;
-      if (!mesh) {
-        if (previous[index]) disposeLocalObject(previous[index].mesh);
-        mesh = createAgentMesh(kind);
-        agentGroup.add(mesh);
-      }
+      const kind = resident.route.length > 4 ? 'car' : 'walker';
       return {
         residentId: resident.id,
         route: resident.route,
-        mesh,
         kind,
         offset: previous[index]?.offset ?? ((index * 0.618) % 1),
-        speed: (kind === "car" ? 0.22 : 0.12) * (0.8 + (index % 5) * 0.08),
+        speed: (kind === 'car' ? 0.22 : 0.12) * (0.8 + (index % 5) * 0.08),
       };
     });
-  previous.slice(city.visualAgents.length).forEach((agent) => disposeLocalObject(agent.mesh));
+  updateVisualAgents(0);
 }
 
 function updateVisualAgents(delta) {
-  city.visualAgents.forEach((agent) => {
-    if (!agent.route?.length) return;
-    agent.offset = (agent.offset + delta * agent.speed * clamp(city.stats.traffic / 100, 0.25, 1.2)) % 1;
+  let cars = 0, walkers = 0;
+  const speed = delta * clamp(city.stats.traffic / 100, 0.25, 1.2);
+  const offset = (GRID_SIZE - 1) * TILE_SIZE / 2;
+  const colors = [0xff9aa8, 0x8fc7ff, 0xffd36f, 0x9be28d];
+  for (let i = 0; i < city.visualAgents.length; i += 1) {
+    const agent = city.visualAgents[i];
+    agent.offset = (agent.offset + speed * agent.speed) % 1;
     const scaled = agent.offset * (agent.route.length - 1);
     const index = Math.floor(scaled);
     const progress = scaled - index;
-    const a = agent.route[index];
-    const b = agent.route[Math.min(index + 1, agent.route.length - 1)];
-    const aw = gridToWorld(a.x, a.z);
-    const bw = gridToWorld(b.x, b.z);
-    agent.mesh.position.set(THREE.MathUtils.lerp(aw.x, bw.x, progress), 0.22, THREE.MathUtils.lerp(aw.z, bw.z, progress));
-    agent.mesh.rotation.y = Math.atan2(bw.x - aw.x, bw.z - aw.z);
-  });
+    const a = agent.route[index], b = agent.route[Math.min(index + 1, agent.route.length - 1)];
+    const x = (a.x + (b.x - a.x) * progress) * TILE_SIZE - offset;
+    const z = (a.z + (b.z - a.z) * progress) * TILE_SIZE - offset;
+    const rotation = Math.atan2(b.x - a.x, b.z - a.z);
+    if (agent.kind === 'car') {
+      putInstance(agentBatches.car, cars, x, 0.58, z, 1, 1, 1, rotation);
+      agentBatches.car.setColorAt(cars, batchColor.setHex(colors[i % colors.length]));
+      putInstance(agentBatches.roof, cars++, x, 0.77, z, 1, 1, 1, rotation);
+    } else {
+      putInstance(agentBatches.walker, walkers, x, 0.64, z);
+      agentBatches.walker.setColorAt(walkers++, batchColor.setHex(colors[i % colors.length]));
+    }
+  }
+  finishBatch(agentBatches.car, cars);
+  finishBatch(agentBatches.roof, cars);
+  finishBatch(agentBatches.walker, walkers);
 }
 
 function updateEffects(delta) {
@@ -2796,18 +2659,13 @@ function updateEffects(delta) {
 }
 
 function updateRoadCongestionVisuals() {
-  city.tiles.forEach((tile) => {
-    if (!tile.roadMesh) return;
-    let overlay = tile.roadMesh.userData.overlay;
-    if (!overlay) {
-      overlay = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.04, 1.28), congestionMaterial.clone());
-      overlay.position.y = 0.2;
-      tile.roadMesh.add(overlay);
-      tile.roadMesh.userData.overlay = overlay;
-    }
-    overlay.visible = tile.congestion > 0.75;
-    overlay.material.opacity = clamp((tile.congestion - 0.6) * 0.45, 0.08, 0.42);
-  });
+  let count = 0;
+  for (const tile of city.tiles) {
+    if (!tile.road || tile.congestion <= 0.75) continue;
+    const position = gridToWorld(tile.x, tile.z);
+    putInstance(congestionBatch, count++, position.x, 0.2, position.z);
+  }
+  finishBatch(congestionBatch, count);
 }
 
 canvas.addEventListener("pointerdown", (event) => {
@@ -2819,27 +2677,29 @@ canvas.addEventListener("pointerdown", (event) => {
   drag.y = event.clientY;
   drag.startX = event.clientX;
   drag.startY = event.clientY;
-  drag.paint = event.button === 0 && event.shiftKey && city.selectedTool === 'road';
+  drag.paint = !creativeControls?.isActive() && event.button === 0 && event.shiftKey && city.selectedTool === 'road';
   drag.lastTile = null;
   drag.initialUndo = drag.paint ? captureUndoState('连续铺路') : null;
   drag.painted = false;
   if (drag.paint) paintRoad(pickTile(event));
   canvas.setPointerCapture(event.pointerId);
+  requestRender(true);
 });
 
 canvas.addEventListener("pointermove", (event) => {
+  const entering = !pointerOnMap;
   pointerOnMap = true;
   placementHint.style.left = `${Math.min(window.innerWidth - 350, event.clientX + 20)}px`;
   placementHint.style.top = `${Math.min(window.innerHeight - 120, event.clientY + 24)}px`;
   const tile = pickTile(event);
-  if (tile) {
+  if (entering || tile !== city.selectedTile) {
     city.selectedTile = tile;
     updateHover();
     const selected = selectedDescription();
     els.selectedTitle.textContent = selected.title;
     els.selectedInfo.textContent = selected.text;
   }
-
+  requestRender(true);
   if (!drag.active) return;
   if (drag.paint) { paintRoad(tile); return; }
   const dx = event.clientX - drag.x;
@@ -2856,7 +2716,7 @@ canvas.addEventListener("pointerup", (event) => {
   const tile = pickTile(event);
   if (!drag.active) return;
   if (drag.paint && drag.painted && drag.initialUndo.save.city.week === city.week) city.undoStack = [drag.initialUndo];
-  const placed = tile && !drag.moved && !drag.paint && event.button === 0 && place(city.selectedTool, tile.x, tile.z);
+  const placed = !creativeControls?.isActive() && tile && !drag.moved && !drag.paint && event.button === 0 && place(city.selectedTool, tile.x, tile.z);
   drag.active = false;
   canvas.releasePointerCapture(event.pointerId);
   if (placed || drag.painted) { computeStats(); refreshVisualAgents(); }
@@ -2864,7 +2724,7 @@ canvas.addEventListener("pointerup", (event) => {
 });
 
 canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-canvas.addEventListener('pointerleave', () => { pointerOnMap = false; updateHover(); });
+canvas.addEventListener('pointerleave', () => { pointerOnMap = false; updateHover(); requestRender(); });
 function cancelPointerGesture() {
   if (drag.active && drag.paint && drag.painted) {
     if (drag.initialUndo.save.city.week === city.week) city.undoStack = [drag.initialUndo];
@@ -2879,7 +2739,7 @@ function cancelPointerGesture() {
 canvas.addEventListener('pointercancel', cancelPointerGesture);
 canvas.addEventListener('lostpointercapture', () => { if (drag.active) cancelPointerGesture(); });
 function paintRoad(tile) {
-  if (!tile) return;
+  if (!tile || creativeControls?.isActive()) return;
   const previous = drag.lastTile || tile;
   const path = [];
   let x = previous.x, z = previous.z;
@@ -2960,6 +2820,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   const key = event.key.toLowerCase();
+  if (creativeControls?.isActive() && (event.ctrlKey || event.metaKey || event.altKey || !['c', '+', '=', '-', '_'].includes(key))) return;
   const toolKeys = {
     "1": "road",
     "2": "residential",
@@ -3030,7 +2891,7 @@ function resize() {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const aspect = width / height;
-  const viewHeight = 41;
+  const viewHeight = 36;
   camera.left = (-viewHeight * aspect) / 2;
   camera.right = (viewHeight * aspect) / 2;
   camera.top = viewHeight / 2;
@@ -3042,38 +2903,18 @@ function resize() {
 function animateScene(elapsed, delta) {
   const frameTime = performance.now() / 1000;
   worldArt?.update(delta, { week: city.week, festival: Boolean(city.demo?.festival) });
-  camera.position.x += (cameraTarget.x + 29 - camera.position.x) * 0.08;
-  camera.position.z += (cameraTarget.z + 34 - camera.position.z) * 0.08;
+  const damping = 1 - Math.exp(-delta * 14);
+  camera.position.x += (cameraTarget.x + 29 - camera.position.x) * damping;
+  camera.position.z += (cameraTarget.z + 34 - camera.position.z) * damping;
   camera.lookAt(cameraTarget.x, 0, cameraTarget.z);
-  cloudGroup.children.forEach((cloud, index) => {
-    cloud.position.x += 0.003 * (index + 1);
-    if (cloud.position.x > 34) cloud.position.x = -34;
-  });
-  decoGroup.children.forEach((mesh) => {
-    if (mesh.geometry?.type === "SphereGeometry") {
-      mesh.scale.setScalar(1 + Math.sin(elapsed * 1.8 + mesh.userData.sway) * 0.025);
-    }
-  });
-  petalGroup.children.forEach((petal) => {
-    const seed = petal.userData.seed;
-    petal.position.y -= delta * petal.userData.speed;
-    petal.position.x += Math.sin(elapsed * 1.2 + seed) * delta * petal.userData.drift;
-    petal.position.z += Math.cos(elapsed * 0.9 + seed) * delta * 0.18;
-    petal.rotation.x += delta * 1.8;
-    petal.rotation.z += delta * 1.2;
-    if (petal.position.y < 0.25) {
-      petal.position.y = 16 + Math.random() * 6;
-      petal.position.x = Math.random() * 62 - 31;
-      petal.position.z = Math.random() * 54 - 27;
-    }
-  });
-  buildingGroup.children.forEach((mesh, index) => {
+  for (const mesh of buildingGroup.children) {
+    if (mesh.userData.settled) continue;
     const age = Math.max(0, frameTime - (mesh.userData.birth || 0));
-    const bounce = age < 0.65 ? 1 + Math.sin(age * Math.PI * 4) * (1 - age / 0.65) * 0.18 : 1;
-    const scale = (1 + ((mesh.userData.level || 1) - 1) * 0.12) * bounce;
-    mesh.scale.lerp(animatedScale.setScalar(scale), 0.18);
-    mesh.position.y = 0.1 + Math.sin(elapsed * 1.4 + index) * 0.008;
-  });
+    const bounce = age < 0.65 ? 1 + Math.sin(age * Math.PI * 4) * (1 - age / 0.65) * 0.12 : 1;
+    mesh.scale.setScalar((1 + ((mesh.userData.level || 1) - 1) * 0.12) * bounce);
+    mesh.updateMatrix();
+    if (age >= 0.65) mesh.userData.settled = true;
+  }
   updateVisualAgents(delta);
   updateEffects(delta);
 }
@@ -3110,25 +2951,38 @@ function seedScenario(id, scenario) {
   city.undoStack = [];
   city.messages = [`欢迎来到${scenario.town}。${scenario.tagline}`];
   cameraTarget.set(0, 0, 0);
-  setCameraZoom(1.1);
+  setCameraZoom(1.16);
 }
 
 function bootGame() {
-  preloadManifestTextures();
-  cloudGroup.visible = false;
   worldArt = createWorldArt({ THREE, scene, gridSize: GRID_SIZE, tileSize: TILE_SIZE });
   createTiles();
+  neighborhoods = createNeighborhoods({
+    city, isConnected: building => hasAdjacentRoad(getTile(building.x, building.z)),
+    getRevision: () => layoutRevision, saveGame, renderUI, addMessage,
+    canBuild: (type, x, z) => canBuild(type, getTile(x, z)),
+    celebrate: spawnChapterCelebration, toast: message => demoController?.toast(message),
+  });
+  neighborhoods.init();
   const loaded = !TEST_MODE && loadGameFromStorage();
   if (!loaded) startNewGame({ keepStorage: TEST_MODE });
   syncMusic();
   renderUI();
   exposeTestApi();
-  demoController = createDemoController({ city, seedScenario, renderUI, recompute: () => { computeStats(); refreshVisualAgents(); }, setTool, setRoadTier, setViewMode, addMessage, celebrate: spawnChapterCelebration, serializeGame, saveGame, validateSave, loadSave: applySave, isGraphicsLost: () => graphicsLost, hasSave: () => { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } } });
+  demoController = createDemoController({ city, seedScenario, renderUI, recompute: () => { computeStats(); refreshVisualAgents(); }, setTool, setRoadTier, setViewMode, addMessage, celebrate: spawnChapterCelebration, serializeGame, saveGame, validateSave, loadSave: applySave, isGraphicsLost: () => graphicsLost, isPhotoMode: () => Boolean(creativeControls?.isActive()), hasSave: () => { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } } });
   demoController.boot({ testMode: TEST_MODE });
   townLife = createTownLife({ city, isConnected: b => hasAdjacentRoad(getTile(b.x, b.z)), recompute: () => { computeStats(); refreshVisualAgents(); }, save: () => saveGame(false), render: renderUI, addMessage, toast: message => demoController.toast(message), confirm: (...args) => demoController.confirm(...args), celebrate: spawnChapterCelebration });
+  creativeControls = createCreativeControls({
+    canEnter: () => !graphicsLost && !demoController.isBlocking() && !city.settings.helpOpen,
+    getPaused: () => city.paused,
+    setPaused: value => { city.paused = value; renderUI(); },
+    onChange: () => { cancelPointerGesture(); updateNeighborhoodFocus(); requestRender(true); },
+  });
   renderUI();
   if (TEST_MODE) window.sunnyTownTest.demo = demoController;
   if (TEST_MODE) window.sunnyTownTest.life = townLife;
+  if (TEST_MODE) window.sunnyTownTest.neighborhoods = neighborhoods;
+  if (TEST_MODE) window.sunnyTownTest.photo = creativeControls;
 }
 
 function exposeTestApi() {
@@ -3147,12 +3001,22 @@ function exposeTestApi() {
     },
     findPathByRoads: (a, b) => findPath(getTile(a.x, a.z), getTile(b.x, b.z))?.map((tile) => ({ x: tile.x, z: tile.z })) || null,
     loadFromStorage: loadGameFromStorage,
+    getRenderStats: () => ({ ...frameStats, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
+    projectTile: (x, z, height = 0.1) => {
+      camera.updateMatrixWorld();
+      const position = gridToWorld(x, z);
+      const projected = new THREE.Vector3(position.x, height, position.z).project(camera);
+      const bounds = canvas.getBoundingClientRect();
+      return { x: bounds.left + (projected.x + 1) * bounds.width / 2, y: bounds.top + (1 - projected.y) * bounds.height / 2 };
+    },
     getState: () => ({
       version: GAME_VERSION,
       saveVersion: SAVE_VERSION,
       demo: city.demo ? JSON.parse(JSON.stringify(city.demo)) : null,
+      neighborhoods: normalizeNeighborhoods(city.neighborhoods),
+      photoMode: creativeControls?.isActive() || false,
       art: worldArt?.stats(),
-      rendering: { calls: renderer.info.render.calls, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, ...frameStats, graphicsLost, pixelRatio: renderer.getPixelRatio() },
+      rendering: { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, ...frameStats, graphicsLost, pixelRatio: renderer.getPixelRatio() },
       stats: { ...city.stats },
       week: city.week,
       weekProgress: city.weekProgress,
@@ -3170,13 +3034,14 @@ function exposeTestApi() {
       tutorial: tutorialProgress().map((task) => ({ id: task.id, title: task.title, text: task.text, done: task.done })),
       tutorialAll: TUTORIAL_TASKS.map((task) => ({ id: task.id, title: task.title, text: task.text, done: task.check() })),
       selectedTool: city.selectedTool,
+      selectedTile: city.selectedTile ? { x: city.selectedTile.x, z: city.selectedTile.z } : null,
       selectedRoadTier: city.selectedRoadTier,
       settings: { ...city.settings },
       helpOpen: city.settings.helpOpen,
       assetManifest: assetManifestSummary(),
       assetRuntime: {
         ...assetRuntime,
-        cachedTextures: Object.keys(pixelTextures).length,
+        cachedTextures: 0,
       },
       effectCount: effectGroup.children.length,
       musicEnabled: Boolean(city.settings.music && !city.settings.muted),
@@ -3255,12 +3120,52 @@ bootGame();
 let frameTimer = null;
 let frameRequest = null;
 let lastFrameAt = performance.now();
+let nextFrameAt = lastFrameAt;
 let animationElapsed = 0;
 
+function stopFrameSchedule() {
+  clearTimeout(frameTimer);
+  cancelAnimationFrame(frameRequest);
+  frameTimer = null;
+  frameRequest = null;
+}
+
+function renderTargetFps(now = performance.now()) {
+  const mode = PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES[DEFAULT_PERFORMANCE];
+  if (demoController?.isBlocking()) return 1;
+  return city.paused && !drag.active && now >= interactionUntil ? Math.min(10, mode.fps) : mode.fps;
+}
+
+function scheduleFrame() {
+  if (document.hidden || graphicsLost || frameTimer !== null || frameRequest !== null) return;
+  // Register before the next display refresh, rather than waiting a whole frame
+  // interval and then another refresh. The deadline is carried across frames.
+  const wait = nextFrameAt - performance.now() - 17;
+  if (wait > 1) {
+    frameTimer = setTimeout(() => {
+      frameTimer = null;
+      frameRequest = requestAnimationFrame(animate);
+    }, wait);
+  } else frameRequest = requestAnimationFrame(animate);
+}
+
+function requestRender(interactive = false) {
+  if (!renderLoopReady || frameExecuting || document.hidden || graphicsLost) return;
+  const now = performance.now();
+  if (interactive) interactionUntil = now + 220;
+  const mode = PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES[DEFAULT_PERFORMANCE];
+  nextFrameAt = Math.min(nextFrameAt, lastFrameAt + 1000 / mode.fps);
+  stopFrameSchedule();
+  scheduleFrame();
+}
+
 function animate() {
+  frameRequest = null;
   if (graphicsLost) return;
   if (document.hidden) { frameStats.hidden = true; return; }
   const started = performance.now();
+  if (started + 1 < nextFrameAt) { scheduleFrame(); return; }
+  frameExecuting = true;
   const delta = Math.min((started - lastFrameAt) / 1000, 0.15);
   lastFrameAt = started;
   animationElapsed += delta;
@@ -3273,39 +3178,40 @@ function animate() {
     }
   }
   animateScene(animationElapsed, delta);
-  updateHover();
   renderer.render(scene, camera);
   frameStats.frames += 1;
   frameStats.cpuMs = Math.round((frameStats.cpuMs * 0.8 + (performance.now() - started) * 0.2) * 100) / 100;
-  const mode = PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES.eco;
-  frameStats.targetFps = demoController?.isBlocking() ? 1 : city.paused ? Math.min(10, mode.fps) : mode.fps;
-  frameTimer = setTimeout(() => { frameRequest = requestAnimationFrame(animate); }, Math.max(0, 1000 / frameStats.targetFps - (performance.now() - started)));
+  frameStats.targetFps = renderTargetFps(started);
+  const interval = 1000 / frameStats.targetFps;
+  nextFrameAt += interval;
+  if (nextFrameAt < started) nextFrameAt = started + interval;
+  frameExecuting = false;
+  scheduleFrame();
 }
 
 document.addEventListener('visibilitychange', () => {
-  clearTimeout(frameTimer);
-  cancelAnimationFrame(frameRequest);
+  stopFrameSchedule();
   frameStats.hidden = document.hidden;
   if (document.hidden) {
     if (drag.active) cancelPointerGesture();
     stopMusic();
     audioContext?.suspend();
   } else {
-    lastFrameAt = performance.now();
+    lastFrameAt = nextFrameAt = performance.now();
     if (!graphicsLost && !city.settings.muted) audioContext?.resume().catch(() => {});
     syncMusic();
-    frameRequest = requestAnimationFrame(animate);
+    scheduleFrame();
   }
 });
-window.addEventListener('pagehide', () => { clearTimeout(frameTimer); cancelAnimationFrame(frameRequest); });
+window.addEventListener('pagehide', stopFrameSchedule);
 window.addEventListener('pageshow', event => {
   if (event.persisted && !document.hidden) {
-    clearTimeout(frameTimer);
-    cancelAnimationFrame(frameRequest);
-    lastFrameAt = performance.now();
-    frameRequest = requestAnimationFrame(animate);
+    stopFrameSchedule();
+    lastFrameAt = nextFrameAt = performance.now();
+    scheduleFrame();
   }
 });
+
 
 const graphicsDialog = document.createElement('dialog');
 graphicsDialog.id = 'graphicsRecovery';
@@ -3327,8 +3233,8 @@ document.getElementById('reloadGraphics').onclick = () => {
 canvas.addEventListener('webglcontextlost', event => {
   event.preventDefault();
   graphicsLost = true;
-  clearTimeout(frameTimer);
-  cancelAnimationFrame(frameRequest);
+  creativeControls?.exit();
+  stopFrameSchedule();
   if (drag.active) cancelPointerGesture();
   stopMusic();
   audioContext?.suspend().catch(() => {});
@@ -3337,11 +3243,11 @@ canvas.addEventListener('webglcontextlost', event => {
 canvas.addEventListener('webglcontextrestored', () => {
   graphicsLost = false;
   graphicsDialog.close();
-  lastFrameAt = performance.now();
-  clearTimeout(frameTimer);
-  cancelAnimationFrame(frameRequest);
+  lastFrameAt = nextFrameAt = performance.now();
+  stopFrameSchedule();
   syncMusic();
-  if (!document.hidden) frameRequest = requestAnimationFrame(animate);
+  if (!document.hidden) scheduleFrame();
   demoController?.toast('画面恢复了，继续照顾小镇吧。');
 });
+renderLoopReady = true;
 animate();

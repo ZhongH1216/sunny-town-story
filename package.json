@@ -1,6 +1,6 @@
 {
   "name": "sunny-town-story",
-  "version": "1.0.0-demo.3",
+  "version": "1.0.0-demo.4",
   "description": "A cozy Chinese 3D town builder with resident letters, seasonal activities, and community projects.",
   "main": "app.py",
   "scripts": {
@@ -15,6 +15,7 @@
     "start": "tools\\node-shim.cmd tools\\start-server.js",
     "test": "tools\\node-shim.cmd tools\\run-tests.js",
     "test:server": "tools\\node-shim.cmd --test tools\\package-server.test.js",
+    "test:art": "tools\\node-shim.cmd --test tools\\world-art.test.js",
     "test:visual": "tools\\node-shim.cmd tools\\run-tests.js tests/visual.spec.js"
   },
   "keywords": ["city-builder", "cozy-game", "simulation-game", "threejs", "webgl", "chinese"],

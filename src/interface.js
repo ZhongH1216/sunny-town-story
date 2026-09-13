@@ -55,6 +55,7 @@ function activatePanel(name, focus = false) {
   for (const page of tabPages) page.hidden = page.dataset.journalPage !== name;
   if (journalScroller && name !== currentPanel) journalScroller.scrollTop = panelScroll.get(name) || 0;
   currentPanel = name;
+  document.querySelector('.advisor-panel').dataset.journalPanel = name;
   refreshNextStep();
   return true;
 }
@@ -152,10 +153,12 @@ function findNextStep() {
   const guide = availableActions(letters, '[data-guide]')[0];
   const project = availableActions(document.querySelector('#communityProjects'))[0];
   const ongoingActivity = document.querySelector('#seasonActivity .life-progress');
+  const neighborhoodReward = availableActions(document.querySelector('#neighborhoodBoard'), '[data-neighborhood-claim]')[0];
   if (festival) return { target: festival, panel: 'letters', text: '祭典准备好了，去看看清单' };
   if (claim) return { target: claim, panel: 'letters', text: '有心愿实现了，给邻居回信' };
   if (choice) return { target: choice, panel: 'letters', text: '建设课的新提案，等你决定' };
   if (readyLife) return { target: readyLife, panel: 'life', text: '街坊活动有新的进展' };
+  if (neighborhoodReward) return { target: neighborhoodReward, panel: 'guide', text: '街区成形了，领取一份灵感奖励' };
   if (currentPanel === 'life' && activity) return { target: activity, panel: 'life', text: '看看这期街坊活动' };
   if (currentPanel === 'life' && ongoingActivity) return { target: ongoingActivity, panel: 'life', text: '活动筹备中，看看还缺些什么' };
   if (guide) {
@@ -178,8 +181,9 @@ function refreshNextStep() {
   nextStepButton.setAttribute('aria-label', `接下来：${step.text}`);
   const lettersNeedAttention = Boolean(document.querySelector('#requestBoard [data-claim], #decisionCard [data-decision]'));
   const lifeNeedAttention = Boolean(availableActions(document.querySelector('[data-journal-page="life"]'), '.is-ready button, button.is-ready').length);
+  const neighborhoodNeedAttention = Boolean(availableActions(document.querySelector('#neighborhoodBoard'), '[data-neighborhood-claim]').length);
   for (const button of tabButtons) {
-    const needsAttention = button.dataset.panel === 'letters' ? lettersNeedAttention : button.dataset.panel === 'life' && lifeNeedAttention;
+    const needsAttention = button.dataset.panel === 'letters' ? lettersNeedAttention : button.dataset.panel === 'life' ? lifeNeedAttention : button.dataset.panel === 'guide' && neighborhoodNeedAttention;
     button.classList.toggle('has-attention', needsAttention);
     button.title = `${tabTitles.get(button.dataset.panel) || ''}${needsAttention ? ' · 有待处理事项' : ''}`;
   }
@@ -221,3 +225,9 @@ const viewButtons = [...document.querySelectorAll('[data-view]')];
 const legendObserver = new MutationObserver(syncMapLegend);
 for (const button of viewButtons) legendObserver.observe(button, { attributes: true, attributeFilter: ['class'] });
 syncMapLegend();
+
+document.getElementById('neighborhoodOpenButton')?.addEventListener('click', () => {
+  activatePanel('guide');
+  document.getElementById('neighborhoodBoard')?.scrollIntoView({ block: 'start' });
+  document.getElementById('journal-page-guide')?.focus({ preventScroll: true });
+});

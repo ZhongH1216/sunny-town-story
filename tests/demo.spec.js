@@ -521,5 +521,14 @@ for (const story of storyCases) {
     await page.locator("#keepPlayingButton").click();
     await expect(page.locator("#demoFinale")).toBeHidden();
     await page.screenshot({ path: "test-results/demo-" + story.id + "-town.png" });
+    require('node:fs').writeFileSync('test-results/demo-' + story.id + '-save.json', JSON.stringify(await page.evaluate(() => window.sunnyTownTest.serializeGame()), null, 2));
+    await page.locator('#neighborhoodOpenButton').click();
+    await page.screenshot({ path: 'test-results/demo-' + story.id + '-neighborhoods.png' });
+    await page.locator('#photoModeButton').click();
+    await expect(page.locator('#photoModeBar')).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'test-results/demo-' + story.id + '-photo.png' });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#photoModeBar')).toBeHidden();
   });
 }

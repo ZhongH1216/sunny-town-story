@@ -1,15 +1,32 @@
 const { test, expect } = require('@playwright/test');
 
-test('eco mode caps rendering, pause lowers it, and hidden pages stop drawing and simulation', async ({ page }) => {
+test('loading an existing power preference preserves it and old saves without one use balanced', async ({ page }) => {
+  await page.goto('/?test=1');
+  await page.waitForFunction(() => window.sunnyTownTest?.demo);
+  const modes = await page.evaluate(() => {
+    const game = window.sunnyTownTest;
+    const results = [];
+    for (const mode of ['eco', 'smooth', undefined]) {
+      const save = game.serializeGame();
+      save.city.settings.performance = mode;
+      const accepted = game.loadSave(save);
+      results.push({ accepted, mode: game.getState().settings.performance });
+    }
+    return results;
+  });
+  expect(modes).toEqual([{ accepted: true, mode: 'eco' }, { accepted: true, mode: 'smooth' }, { accepted: true, mode: 'balanced' }]);
+});
+
+test('new towns default to balanced 30 fps, pause lowers it, and hidden pages stop drawing and simulation', async ({ page }) => {
   await page.goto('/?test=1');
   await page.waitForFunction(() => window.sunnyTownTest?.demo);
   const read = () => page.evaluate(() => window.sunnyTownTest.getState());
   let before = await read();
-  expect(before.settings.performance).toBe('eco');
-  expect(before.rendering.pixelRatio).toBeLessThanOrEqual(1);
+  expect(before.settings.performance).toBe('balanced');
+  expect(before.rendering.pixelRatio).toBeLessThanOrEqual(1.25);
   await page.waitForTimeout(1500);
   let after = await read();
-  expect(after.rendering.frames - before.rendering.frames).toBeLessThanOrEqual(38);
+  expect(after.rendering.frames - before.rendering.frames).toBeLessThanOrEqual(48);
   expect(after.rendering.frames - before.rendering.frames).toBeGreaterThan(0);
   await page.locator('#pauseButton').click();
   await page.waitForTimeout(180);
@@ -59,6 +76,33 @@ test('repeated town rebuilds release old graphics and keep effect counts bounded
   expect(after.rendering.calls).toBeLessThan(300);
 });
 
+test('a dense town and its service layer keep rendering submissions bounded', async ({ page }) => {
+  await page.goto('/?test=1');
+  await page.waitForFunction(() => window.sunnyTownTest?.demo);
+  const loaded = await page.evaluate(() => {
+    const game = window.sunnyTownTest;
+    if (!game.getState().paused) document.getElementById('pauseButton').click();
+    const save = game.serializeGame();
+    const roads = [], buildings = [];
+    for (let z = 1; z <= 16; z += 1) for (let x = 1; x <= 16; x += 1) {
+      if (z % 3 === 2 || x === 1) roads.push({ x, z, roadTier: x % 3 === 0 ? 'avenue' : 'lane' });
+      else buildings.push({ id: `performance-${x}-${z}`, type: ['residential', 'commercial', 'park', 'water', 'power'][(x + z) % 5], x, z, level: 1, age: 10 });
+    }
+    Object.assign(save.city, { tiles: roads, buildings, population: 400, week: 51, demo: null, life: null, completed: true });
+    return game.loadSave(save);
+  });
+  expect(loaded).toBe(true);
+  await page.waitForTimeout(300);
+  const normal = await page.evaluate(() => window.sunnyTownTest.getState());
+  expect(normal.buildingCount).toBeGreaterThan(100);
+  expect(normal.rendering.calls).toBeLessThan(400);
+  await page.locator('[data-view="services"]').click();
+  await page.waitForTimeout(200);
+  const services = await page.evaluate(() => window.sunnyTownTest.getState());
+  expect(services.rendering.calls).toBeLessThan(normal.rendering.calls + 10);
+  expect(services.rendering.geometries).toBeLessThan(450);
+});
+
 test('the normal player menu confirms a new journey and resumes it at the selected power setting', async ({ page }) => {
   await page.addInitScript(() => {
     window.audioActivity = { resumes: 0, tones: 0 };
@@ -80,7 +124,7 @@ test('the normal player menu confirms a new journey and resumes it at the select
   await page.locator('#startDemoButton').click();
   await expect(page.locator('#welcomeOverlay')).toBeHidden();
   await page.locator('summary').filter({ hasText: '存档管理' }).click();
-  await page.locator('#performanceSelect').selectOption('balanced');
+  await page.locator('#performanceSelect').selectOption('eco');
   await page.locator('#townMenuButton').click();
   await page.locator('[data-scenario="garden"]').click();
   await page.locator('#startDemoButton').click();
@@ -90,7 +134,7 @@ test('the normal player menu confirms a new journey and resumes it at the select
   await expect(page.locator('#demoScenarioName')).toContainText('花见町');
   await expect(page.locator('#pauseButton')).toContainText('暂停');
   const save = await page.evaluate(() => JSON.parse(localStorage.getItem('sunny-town-story.save.v1')));
-  expect(save.city.settings.performance).toBe('balanced');
+  expect(save.city.settings.performance).toBe('eco');
   expect(save.city.demo.scenario).toBe('garden');
   // The click queues an audio cue. Hiding in the same task must prevent that
   // deferred cue from waking WebAudio after the visibility handler suspends it.

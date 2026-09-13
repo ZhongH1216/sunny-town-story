@@ -31,6 +31,23 @@ const includeFiles = [
 
 const includeDirs = ["assets", "docs", "scripts", "src", "tools"];
 
+// src is copied recursively. Keep this minimum browser contract explicit as well,
+// so an accidentally missing module/style fails before an existing build is replaced.
+const runtimeSourceFiles = [
+  "src/app.js",
+  "src/asset-manifest.js",
+  "src/interface.js",
+  "src/demo.js",
+  "src/town-life.js",
+  "src/world-art.js",
+  "src/art-batch.js",
+  "src/neighborhoods.js",
+  "src/creative-controls.js",
+  "src/styles.css",
+  "src/demo-ui.css",
+  "src/creative-ui.css",
+];
+
 const runtimeNodeFiles = [
   "node_modules/three/LICENSE",
   "node_modules/three/package.json",
@@ -229,6 +246,12 @@ function writeManifest() {
 }
 
 function main() {
+  for (const file of [...runtimeSourceFiles, ...runtimeNodeFiles]) {
+    const source = path.join(root, file);
+    if (!fs.existsSync(source) || !fs.statSync(source).isFile() || fs.statSync(source).size === 0) {
+      throw new Error(`Missing or empty browser runtime input: ${file}`);
+    }
+  }
   assertInside(root, distRoot);
   if (path.relative(root, distRoot).split(path.sep)[0] !== "dist") {
     throw new Error("Package output must be dist or a subdirectory of dist");
@@ -262,6 +285,7 @@ module.exports = {
   packageDir,
   zipPath,
   distRoot,
+  runtimeSourceFiles,
   listFiles,
   sha256,
 };

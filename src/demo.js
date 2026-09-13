@@ -121,7 +121,7 @@ export function createDemoController(api) {
     city.paused = open || Boolean(state()?.festival && !state()?.continued) ? true : wasPaused;
     $('welcomeOverlay').hidden = !open;
     $('welcomeOverlay').setAttribute("aria-hidden", String(!open));
-    document.querySelector('.game-shell')?.toggleAttribute('inert', open);
+    document.querySelector('.game-shell')?.toggleAttribute('inert', open || Boolean(api.isPhotoMode?.()));
     // The welcome lives outside game-shell so its controls remain usable.
     $('welcomeCloseButton').hidden = !state() && !api.hasSave();
     $('continueDemoButton').hidden = !api.hasSave() && !state();
@@ -212,7 +212,7 @@ export function createDemoController(api) {
     const finaleVisible = Boolean(s?.festival && !s.continued && !welcomeOpen);
     const openedFinale = finaleVisible && $('demoFinale').hidden;
     $('demoFinale').hidden = !finaleVisible;
-    document.querySelector('.game-shell')?.toggleAttribute('inert', welcomeOpen || finaleVisible);
+    document.querySelector('.game-shell')?.toggleAttribute('inert', welcomeOpen || finaleVisible || Boolean(api.isPhotoMode?.()));
     if (finaleVisible) city.paused = true;
     if (openedFinale) $('keepPlayingButton')?.focus();
     const key = JSON.stringify([s, Math.round(city.stats.money), city.stats.population, city.stats.happiness, city.stats.water, city.stats.power, city.stats.traffic, city.stats.education, city.stats.employmentRate, city.stats.fire, city.stats.culture, city.week, city.buildings.map((b) => b.type), city.upgradeCount, city.tiles.filter((t) => t.roadTier === 'avenue').length]);

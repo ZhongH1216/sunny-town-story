@@ -110,9 +110,12 @@ test("P4 asset manifest is exposed for texture and audio production", async ({ p
   expect(manifest.textureCount).toBeGreaterThanOrEqual(11);
   expect(manifest.audioCueCount).toBeGreaterThanOrEqual(8);
   expect(manifest.musicNoteCount).toBeGreaterThanOrEqual(8);
-  expect(runtime.textureMode).toBe(manifest.textureMode);
-  expect(runtime.cachedTextures).toBeGreaterThanOrEqual(manifest.textureCount);
-  expect(runtime.loadedTextures).toBeGreaterThanOrEqual(manifest.textureCount);
+  // The legacy asset catalogue remains available for production tools; current
+  // models use vertex colours and must not allocate unused texture resources.
+  expect(runtime.textureMode).toBe('vertex-colors');
+  expect(runtime.modelStyle).toBe('coastal-lowpoly');
+  expect(runtime.cachedTextures).toBe(0);
+  expect(runtime.loadedTextures).toBe(0);
   expect(runtime.failedTextures).toBe(0);
 });
 
@@ -1032,9 +1035,9 @@ test("manual saves unlock an achievement and update save status", async ({ page 
 test("P5 RC version and in-game help are visible and controllable", async ({ page }) => {
   await page.goto("/?test=1");
   let after = await state(page);
-  expect(after.version).toBe("1.0.0-demo.3");
+  expect(after.version).toBe("1.0.0-demo.4");
   expect(after.saveVersion).toBe(3);
-  await expect(page.locator("#versionLabel")).toContainText("1.0.0-demo.3");
+  await expect(page.locator("#versionLabel")).toContainText("1.0.0-demo.4");
   await expect(page.locator("#helpOverlay")).not.toBeVisible();
 
   await page.locator("#helpButton").click();
@@ -1047,7 +1050,7 @@ test("P5 RC version and in-game help are visible and controllable", async ({ pag
   await expect(page.locator("#helpOverlay")).toContainText("升级与成长");
   await expect(page.locator("#helpOverlay")).toContainText("存档");
   await expect(page.locator("#helpOverlay")).toContainText("快捷键");
-  await expect(page.locator("#helpVersion")).toContainText("1.0.0-demo.3");
+  await expect(page.locator("#helpVersion")).toContainText("1.0.0-demo.4");
 
   await page.keyboard.press("Escape");
   after = await state(page);

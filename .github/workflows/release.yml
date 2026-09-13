@@ -81,6 +81,11 @@ jobs:
           npm.cmd run test:server
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: 验证场景几何与资源释放
+        run: |
+          npm.cmd run test:art
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: 完整浏览器回归
         run: |
           npm.cmd test -- --reporter=line,junit --output=dist/ci-diagnostics/test-results
