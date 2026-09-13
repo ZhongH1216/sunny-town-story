@@ -1,0 +1,213 @@
+name: 试玩版验收与发布
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    name: Windows 验收与打包
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      SUNNY_TOWN_SOFTWARE_WEBGL: "1"
+      PLAYWRIGHT_JUNIT_OUTPUT_FILE: dist/ci-diagnostics/playwright-results.xml
+    steps:
+      - name: 读取源码
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 配置 Python
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: 配置 Python 路径并检查版本标签
+        id: package
+        env:
+          SUNNY_SETUP_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          "SUNNY_TOWN_PYTHON=$env:SUNNY_SETUP_PYTHON" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $package = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+          if ($package.name -cne 'sunny-town-story' -or $package.version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw '包名或版本格式不正确。'
+          }
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF_NAME -cne ('v' + $package.version)) {
+            throw "标签 $env:GITHUB_REF_NAME 必须严格等于 v$($package.version)。"
+          }
+          "basename=$($package.name)-$($package.version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: 安装锁定依赖
+        run: |
+          npm.cmd ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 安装测试浏览器
+        run: |
+          npm.cmd run install:browsers
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 检查开发环境
+        run: |
+          npm.cmd run check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 验证服务与启动脚本
+        run: |
+          npm.cmd run test:server
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 完整浏览器回归
+        run: |
+          npm.cmd test -- --reporter=line,junit --output=dist/ci-diagnostics/test-results
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 验证实际试玩压缩包
+        run: |
+          npm.cmd run verify:package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 上传通过验收的试玩包
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-release-package
+          path: |
+            dist/${{ steps.package.outputs.basename }}.zip
+            dist/${{ steps.package.outputs.basename }}.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
+      - name: 收集测试截图与结果
+        if: always()
+        run: |
+          # 仅收集测试生成的截图和结果，不上传源码目录、环境配置或凭据。
+          $source = Join-Path $env:GITHUB_WORKSPACE 'test-results'
+          $destination = Join-Path $env:GITHUB_WORKSPACE 'dist/ci-diagnostics/extra-results'
+          if (Test-Path -LiteralPath $source) {
+            Get-ChildItem -LiteralPath $source -File -Recurse |
+              Where-Object { $_.Extension -in '.png', '.json', '.xml' } |
+              ForEach-Object {
+                $relative = [System.IO.Path]::GetRelativePath($source, $_.FullName)
+                $target = Join-Path $destination $relative
+                New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+                Copy-Item -LiteralPath $_.FullName -Destination $target
+              }
+          }
+
+      - name: 上传验证诊断
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-validation-diagnostics
+          path: |
+            dist/ci-diagnostics/
+            dist/package-verification/*.json
+            dist/package-verification/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+  publish:
+    name: 发布试玩预览版本
+    needs: build
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' }}
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: 读取版本与发布说明
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: 下载已验收的两个发布附件
+        uses: actions/download-artifact@v8
+        with:
+          name: demo-release-package
+          path: dist/release-assets
+
+      - name: 创建带完整附件的草稿并发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          # 本任务不运行仓库 JavaScript/npm，只读取元数据和发布说明。
+          $package = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+          if ($package.name -cne 'sunny-town-story' -or $package.version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw '包名或版本格式不正确。'
+          }
+          if ($env:RELEASE_TAG -cne ('v' + $package.version)) {
+            throw '发布标签与 package.json 版本不一致。'
+          }
+          $basename = "$($package.name)-$($package.version)"
+          $archive = Join-Path $env:GITHUB_WORKSPACE "dist/release-assets/$basename.zip"
+          $checksum = "$archive.sha256"
+          $notes = Join-Path $env:GITHUB_WORKSPACE 'docs/GITHUB_RELEASE.md'
+          foreach ($file in @($archive, $checksum, $notes)) {
+            if (!(Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -eq 0) {
+              throw "缺少必需的发布文件：$file"
+            }
+          }
+          $checksumLine = (Get-Content -LiteralPath $checksum -Raw).Trim()
+          if ($checksumLine -notmatch '^([a-fA-F0-9]{64})  ([^\\/\r\n]+)$') {
+            throw 'SHA-256 文件格式不正确。'
+          }
+          $expectedHash = $Matches[1]
+          if ($Matches[2] -cne "$basename.zip" -or (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $expectedHash) {
+            throw '发布附件的文件名或 SHA-256 校验不一致。'
+          }
+
+          # 已有草稿或公开版本都交由人工处理，重跑不会覆盖已有附件。
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            throw '此标签已有 Release；为避免覆盖，工作流停止，请人工检查现有版本。'
+          }
+
+          gh release create $env:RELEASE_TAG $archive $checksum --repo $env:GITHUB_REPOSITORY --verify-tag --draft --prerelease --title "阳光小镇物语 $($package.version) 试玩版" --notes-file $notes
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $releaseJson = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $release = $releaseJson | ConvertFrom-Json
+          $expectedAssets = @{
+            "$basename.zip" = (Get-Item -LiteralPath $archive).Length
+            "$basename.zip.sha256" = (Get-Item -LiteralPath $checksum).Length
+          }
+          if (!$release.isDraft -or $release.assets.Count -ne 2) {
+            throw '草稿状态或附件数量异常；保持现状，等待人工检查。'
+          }
+          foreach ($asset in $release.assets) {
+            if (!$expectedAssets.ContainsKey($asset.name) -or $asset.size -ne $expectedAssets[$asset.name]) {
+              throw '草稿附件名称或大小不一致；不执行公开发布。'
+            }
+          }
+
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
