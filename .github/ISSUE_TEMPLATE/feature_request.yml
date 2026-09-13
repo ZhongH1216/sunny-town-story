@@ -1,0 +1,50 @@
+name: 体验与功能建议
+description: 从具体游玩情景出发，描述希望改善的体验。
+title: "[建议] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请优先说明玩家遇到的不足和想获得的体验。可以提出方案，不需要先设计技术实现。
+  - type: textarea
+    id: player_need
+    attributes:
+      label: 当前体验有什么不足？
+      description: 描述你在游玩中的目标，以及哪里让你感到困惑、重复、受阻或缺少乐趣。
+      placeholder: "例如：完成祭典后，我想继续照顾原来的城镇，但不容易找到下一项有意义的目标。"
+    validations:
+      required: true
+  - type: textarea
+    id: desired_experience
+    attributes:
+      label: 希望获得怎样的体验？
+      description: 说明玩家能做什么、看到什么变化，以及它为何有帮助。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要涉及的方面（可选）
+      options:
+        - 经营与成长
+        - 居民来信与故事
+        - 活动与社区项目
+        - 建造与地图操作
+        - 界面与易用性
+        - 画面、音效与性能
+        - 其他
+  - type: textarea
+    id: example
+    attributes:
+      label: 具体游玩情景（可选）
+      description: 可以用一次操作、一个城镇阶段或一段小故事说明建议如何发挥作用。
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有做法或其他方案（可选）
+      description: 现在如何处理这个需求？如果有更简单的改善方式，也欢迎写下。
+  - type: textarea
+    id: references
+    attributes:
+      label: 草图或参考（可选）
+      description: 可附草图、截图或参考链接，并说明希望借鉴的具体体验。

@@ -523,7 +523,6 @@ test("P2 upgrade rules block immature districts and unlock after services improv
     t.setMoney(300000);
     for (let x = 2; x <= 12; x += 1) t.place("road", x, 4, { tier: "avenue" });
     t.place("power", 2, 5);
-    t.place("water", 3, 5);
     t.place("residential", 4, 5);
     t.setSelectedTile(4, 5);
   });
@@ -533,6 +532,7 @@ test("P2 upgrade rules block immature districts and unlock after services improv
 
   await page.evaluate(() => {
     const t = window.sunnyTownTest;
+    t.place("water", 3, 5);
     t.place("residential", 5, 5);
     t.place("residential", 6, 5);
     t.place("residential", 7, 5);
@@ -540,7 +540,7 @@ test("P2 upgrade rules block immature districts and unlock after services improv
     t.place("industrial", 9, 5);
     t.advanceWeek(22);
     t.place("residential", 10, 5);
-    t.place("park", 3, 5);
+    t.place("park", 3, 3);
     t.place("school", 11, 5);
     t.place("plaza", 12, 5);
     t.advanceWeek(10);
@@ -1032,9 +1032,9 @@ test("manual saves unlock an achievement and update save status", async ({ page 
 test("P5 RC version and in-game help are visible and controllable", async ({ page }) => {
   await page.goto("/?test=1");
   let after = await state(page);
-  expect(after.version).toBe("1.0.0-rc.1");
-  expect(after.saveVersion).toBe(2);
-  await expect(page.locator("#versionLabel")).toContainText("1.0.0-rc.1");
+  expect(after.version).toBe("1.0.0-demo.3");
+  expect(after.saveVersion).toBe(3);
+  await expect(page.locator("#versionLabel")).toContainText("1.0.0-demo.3");
   await expect(page.locator("#helpOverlay")).not.toBeVisible();
 
   await page.locator("#helpButton").click();
@@ -1047,7 +1047,7 @@ test("P5 RC version and in-game help are visible and controllable", async ({ pag
   await expect(page.locator("#helpOverlay")).toContainText("升级与成长");
   await expect(page.locator("#helpOverlay")).toContainText("存档");
   await expect(page.locator("#helpOverlay")).toContainText("快捷键");
-  await expect(page.locator("#helpVersion")).toContainText("1.0.0-rc.1");
+  await expect(page.locator("#helpVersion")).toContainText("1.0.0-demo.3");
 
   await page.keyboard.press("Escape");
   after = await state(page);
@@ -1132,7 +1132,12 @@ test("P5 all buildable tools can be placed and removable in an unlocked QA town"
       ["plaza", 9, 7],
       ["station", 10, 7],
       ["lantern", 11, 7],
-    ].forEach(([type, x, z]) => t.place(type, x, z));
+    ].forEach(([type, x, z]) => {
+      // This case checks every tool, so re-establish its explicit QA unlock
+      // fixture after each placement now that placement refreshes statistics.
+      t.setQaMetrics({ chapterIndex: 4, stats: { population: 900, happiness: 90, traffic: 90, power: 100, water: 100, education: 100, fire: 100, culture: 100, transport: 100, employmentRate: 90 } });
+      t.place(type, x, z);
+    });
     t.setQaMetrics({
       stats: {
         population: 900,

@@ -1,13 +1,28 @@
 import * as THREE from "../node_modules/three/build/three.module.js";
 import { ASSET_MANIFEST, assetManifestSummary } from "./asset-manifest.js";
+import { createDemoController, normalizeDemoState, demoEconomy, demoUnlock } from "./demo.js";
+import { createWorldArt } from "./world-art.js";
+import { createTownLife, normalizeTownLife, townLifeEffects } from "./town-life.js";
+
+let demoController = null;
+let worldArt = null;
+let townLife = null;
+let lifeEffects = townLifeEffects(null);
+let graphicsLost = false;
+let viewMode = 'normal';
+let pointerOnMap = false;
+let ghost = null;
+let ghostType = null;
+const PERFORMANCE_MODES = { eco: { fps: 24, resolution: 1 }, balanced: { fps: 30, resolution: 1.25 }, smooth: { fps: 60, resolution: 1.5 } };
+const frameStats = { frames: 0, cpuMs: 0, targetFps: 24, hidden: false };
 
 const GRID_SIZE = 18;
 const TILE_SIZE = 2.4;
 const WEEK_SECONDS = 4;
 const INITIAL_MONEY = 50000;
 const MAX_VISUAL_AGENTS = 60;
-const GAME_VERSION = "1.0.0-rc.1";
-const SAVE_VERSION = 2;
+const GAME_VERSION = "1.0.0-demo.3";
+const SAVE_VERSION = 3;
 const SAVE_KEY = "sunny-town-story.save.v1";
 const AUTO_SAVE_INTERVAL_WEEKS = 4;
 const MAX_BUILDING_LEVEL = 3;
@@ -294,7 +309,7 @@ const ACHIEVEMENTS = [
   { id: "main_story", title: "阳光小镇", text: "完成第五章主线。", check: () => city.completed },
 ];
 
-const seasons = ["春季", "初夏", "盛夏", "秋日"];
+const seasons = ["春季", "夏季", "秋季", "冬季"];
 const DIRS = [
   { bit: 1, dx: 0, dz: -1, name: "北" },
   { bit: 2, dx: 1, dz: 0, name: "东" },
@@ -315,7 +330,7 @@ function tileIndex(x, z) {
 }
 
 function inBounds(x, z) {
-  return x >= 0 && z >= 0 && x < GRID_SIZE && z < GRID_SIZE;
+  return Number.isInteger(x) && Number.isInteger(z) && x >= 0 && z >= 0 && x < GRID_SIZE && z < GRID_SIZE;
 }
 
 function gridToWorld(x, z) {
@@ -361,12 +376,12 @@ function buildingValue(building, key) {
   const level = buildingLevel(building);
   if (key === "capacity") return Math.round((config.capacity || 0) * levelMultiplier("capacity", level));
   if (key === "jobs") return Math.round((config.jobs || 0) * levelMultiplier("jobs", level));
-  if (key === "tax") return Math.round((config.tax || 0) * levelMultiplier("tax", level));
+  if (key === "tax") return Math.round((config.tax || 0) * levelMultiplier("tax", level) * (building.type === 'commercial' ? lifeEffects.commercial : 1));
   if (key === "maintenance") return Math.round((config.maintenance || 0) * levelMultiplier("maintenance", level));
   if (key === "radius") return Math.round((config.radius || 0) * levelMultiplier("service", level));
-  if (key === "serviceCapacity") return Math.round((config.serviceCapacity || 0) * levelMultiplier("service", level));
-  if (key === "supply") return Math.round((config.supply || 0) * levelMultiplier("supply", level));
-  if (key === "pollution") return Math.round((config.pollution || 0) * levelMultiplier("pollution", level));
+  if (key === "serviceCapacity") return Math.round((config.serviceCapacity || 0) * levelMultiplier("service", level) * (lifeEffects[config.service] || 1));
+  if (key === "supply") return Math.round((config.supply || 0) * levelMultiplier("supply", level) * lifeEffects.utilities);
+  if (key === "pollution") return Math.round((config.pollution || 0) * levelMultiplier("pollution", level) * lifeEffects.pollution);
   return config[key] || 0;
 }
 
@@ -467,6 +482,7 @@ function evaluateRequirements(requirements = {}) {
 
 function unlockState(tool) {
   const config = BUILDINGS[tool];
+  if (demoUnlock(tool, city.demo)) return { ok: true, missing: [], label: "居民建设计划已开放" };
   if (!config || tool === "road" || tool === "bulldoze") return { ok: true, missing: [], label: "" };
   const requirements = config.unlock || { chapter: config.unlockChapter || 0 };
   const result = evaluateRequirements(requirements);
@@ -496,7 +512,7 @@ function eventImpact() {
 }
 
 function ensureAudio() {
-  if (city.settings.muted || city.settings.volume <= 0) return null;
+  if (graphicsLost || document.hidden || city.settings.muted || city.settings.volume <= 0) return null;
   const AudioCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtor) return null;
   if (!audioContext) audioContext = new AudioCtor();
@@ -519,11 +535,13 @@ function playTone({ frequency = 440, duration = 0.12, type = "sine", gain = 0.18
   envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   oscillator.connect(envelope);
   envelope.connect(context.destination);
+  oscillator.onended = () => { oscillator.disconnect(); envelope.disconnect(); };
   oscillator.start(now);
   oscillator.stop(now + duration + 0.03);
 }
 
 function playSound(name) {
+  if (TEST_MODE || document.hidden) return;
   const cues = ASSET_MANIFEST.audioCues;
   (cues[name] || cues.ui).forEach((sound, index) => window.setTimeout(() => playTone(sound), index * 70));
 }
@@ -534,7 +552,7 @@ function stopMusic() {
 }
 
 function playMusicStep() {
-  if (TEST_MODE || city.settings.muted || !city.settings.music || city.settings.volume <= 0) return;
+  if (document.hidden || TEST_MODE || city.settings.muted || !city.settings.music || city.settings.volume <= 0) return;
   const loop = ASSET_MANIFEST.musicLoop;
   const note = loop.notes[musicStep % loop.notes.length];
   const bass = loop.bass[musicStep % loop.bass.length];
@@ -545,7 +563,7 @@ function playMusicStep() {
 
 function syncMusic() {
   stopMusic();
-  if (TEST_MODE || city.settings.muted || !city.settings.music || city.settings.volume <= 0) return;
+  if (graphicsLost || document.hidden || TEST_MODE || city.settings.muted || !city.settings.music || city.settings.volume <= 0) return;
   ensureAudio();
   playMusicStep();
   musicTimer = window.setInterval(playMusicStep, ASSET_MANIFEST.musicLoop.tempoMs);
@@ -678,6 +696,7 @@ const els = {
 };
 
 const city = {
+  demo: null,
   tiles: Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => ({
     x: index % GRID_SIZE,
     z: Math.floor(index / GRID_SIZE),
@@ -725,6 +744,7 @@ const city = {
   upgradeCount: 0,
   undoStack: [],
   settings: {
+    performance: 'eco',
     muted: false,
     volume: 0.45,
     music: true,
@@ -776,13 +796,15 @@ const city = {
 };
 
 const canvas = document.querySelector("#scene");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'low-power', preserveDrawingBuffer: TEST_MODE });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa8ddff);
-scene.fog = new THREE.Fog(0xa8ddff, 42, 96);
+scene.fog = new THREE.Fog(0xd9e9dc, 70, 155);
 
 const camera = new THREE.OrthographicCamera(-32, 32, 20, -20, 0.1, 220);
 camera.position.set(29, 34, 34);
@@ -795,14 +817,15 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const drag = { active: false, moved: false, x: 0, y: 0 };
 const cameraTarget = new THREE.Vector3(0, 0, 0);
+const animatedScale = new THREE.Vector3();
 let audioContext = null;
 let musicTimer = null;
 let musicStep = 0;
 
-const sun = new THREE.DirectionalLight(0xfff2c2, 3.2);
+const sun = new THREE.DirectionalLight(0xffedcf, 2.1);
 sun.position.set(-20, 42, 18);
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xdff7ff, 0xa2ce80, 1.7));
+scene.add(new THREE.HemisphereLight(0xe6f5ec, 0x8aa891, 1.25));
 
 const tileGroup = new THREE.Group();
 const roadGroup = new THREE.Group();
@@ -810,13 +833,14 @@ const buildingGroup = new THREE.Group();
 const decoGroup = new THREE.Group();
 const agentGroup = new THREE.Group();
 const effectGroup = new THREE.Group();
-world.add(tileGroup, roadGroup, buildingGroup, decoGroup, agentGroup, effectGroup);
+const heatmapGroup = new THREE.Group();
+world.add(tileGroup, roadGroup, buildingGroup, decoGroup, agentGroup, effectGroup, heatmapGroup);
 
-const tileGeometry = new THREE.BoxGeometry(TILE_SIZE * 0.96, 0.12, TILE_SIZE * 0.96);
+const tileGeometry = new THREE.BoxGeometry(TILE_SIZE * 0.993, 0.12, TILE_SIZE * 0.993);
 const grassMaterials = [
-  new THREE.MeshStandardMaterial({ color: 0xbce98e, roughness: 0.85 }),
-  new THREE.MeshStandardMaterial({ color: 0xcaf0a3, roughness: 0.85 }),
-  new THREE.MeshStandardMaterial({ color: 0xb4e388, roughness: 0.85 }),
+  new THREE.MeshStandardMaterial({ color: 0x9cba81, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ color: 0x9fbc85, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ color: 0x99b77f, roughness: 0.95 }),
 ];
 const roadMaterials = {
   lane: new THREE.MeshStandardMaterial({ color: ROAD_TIERS.lane.color, roughness: 0.86 }),
@@ -841,6 +865,65 @@ const hoverMesh = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE, 0.16, TILE_SIZ
 hoverMesh.position.y = 0.12;
 hoverMesh.visible = false;
 scene.add(hoverMesh);
+const radiusPreview = new THREE.Mesh(new THREE.RingGeometry(0.98, 1, 64), new THREE.MeshBasicMaterial({ color: 0x67b99c, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+radiusPreview.rotation.x = -Math.PI / 2;
+radiusPreview.visible = false;
+scene.add(radiusPreview);
+const placementHint = document.createElement('div');
+placementHint.className = 'placement-hint';
+placementHint.hidden = true;
+document.body.append(placementHint);
+
+function setViewMode(mode) {
+  viewMode = ['normal', 'traffic', 'services'].includes(mode) ? mode : 'normal';
+  document.querySelectorAll('[data-view]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.view === viewMode);
+    button.setAttribute('aria-pressed', String(button.dataset.view === viewMode));
+  });
+  heatmapGroup.visible = viewMode !== 'normal';
+  updateHeatmap();
+}
+
+function updateHeatmap() {
+  if (viewMode === 'normal') return;
+  if (!heatmapGroup.children.length && city.tiles[0]?.mesh) {
+    const geometry = new THREE.PlaneGeometry(TILE_SIZE * 0.94, TILE_SIZE * 0.94);
+    geometry.userData.persistent = true;
+    city.tiles.forEach((tile) => {
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.52, depthWrite: false, side: THREE.DoubleSide }));
+      const position = gridToWorld(tile.x, tile.z);
+      mesh.position.set(position.x, 0.27, position.z);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.userData.tile = tile;
+      heatmapGroup.add(mesh);
+    });
+  }
+  heatmapGroup.children.forEach((mesh) => {
+    const tile = mesh.userData.tile;
+    mesh.visible = viewMode === 'services' || tile.road;
+    const health = viewMode === 'traffic' ? 1 - clamp(tile.congestion, 0, 1) : ((tile.coverage.power || 0) + (tile.coverage.water || 0)) / 2;
+    mesh.material.color.setHex(health > 0.7 ? 0x49bc95 : health > 0.35 ? 0xf5c96a : 0xe98372);
+  });
+}
+
+function disposeLocalObject(object) {
+  if (!object) return;
+  worldArt?.releaseBuilding(object);
+  const persistent = new Set([...Object.values(pixelTextures), ...Object.values(roadMaterials), ...grassMaterials, tileGeometry]);
+  const geometries = new Set(), materials = new Set(), textures = new Set();
+  object.traverse((mesh) => {
+    if (mesh.geometry && !mesh.geometry.userData.artSharedResource && !mesh.geometry.userData.persistent && !persistent.has(mesh.geometry)) geometries.add(mesh.geometry);
+    for (const material of Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []) {
+      if (persistent.has(material) || material.userData.artSharedResource || material.userData.persistent) continue;
+      materials.add(material);
+      if (material.map && !persistent.has(material.map) && !material.map.userData.artSharedResource) textures.add(material.map);
+    }
+  });
+  textures.forEach((resource) => resource.dispose());
+  materials.forEach((resource) => resource.dispose());
+  geometries.forEach((resource) => resource.dispose());
+  object.removeFromParent();
+}
 
 const cloudGroup = new THREE.Group();
 scene.add(cloudGroup);
@@ -885,21 +968,20 @@ function createPetals() {
 }
 
 function createTiles() {
-  city.tiles.forEach((tile) => {
+  const mesh = new THREE.InstancedMesh(tileGeometry, grassMaterials[0], city.tiles.length);
+  const transform = new THREE.Object3D();
+  city.tiles.forEach((tile, index) => {
     const { x, z } = gridToWorld(tile.x, tile.z);
-    const mesh = new THREE.Mesh(tileGeometry, grassMaterials[(tile.x + tile.z) % grassMaterials.length]);
-    mesh.position.set(x, 0, z);
-    mesh.userData.tile = tile;
+    transform.position.set(x, 0, z);
+    transform.updateMatrix();
+    mesh.setMatrixAt(index, transform.matrix);
+    mesh.setColorAt(index, new THREE.Color((tile.x + tile.z) % 3 === 0 ? 0xffffff : 0xf8fcf3));
     tile.mesh = mesh;
-    tileGroup.add(mesh);
   });
+  mesh.instanceMatrix.needsUpdate = true;
+  tileGroup.add(mesh);
 
-  for (let i = 0; i < 44; i += 1) {
-    const x = Math.floor(Math.random() * GRID_SIZE);
-    const z = Math.floor(Math.random() * GRID_SIZE);
-    if ((x > 5 && x < 13 && z > 6 && z < 12) || Math.random() < 0.26) continue;
-    makeTree(x + Math.random() * 0.5 - 0.25, z + Math.random() * 0.5 - 0.25, Math.random() > 0.55);
-  }
+  // World-art owns deterministic vegetation outside the buildable grid.
 }
 
 function makeTree(x, z, cherry = false) {
@@ -969,7 +1051,9 @@ function refreshRoadMasks() {
 }
 
 function createRoadMesh(tile) {
-  if (tile.roadMesh) roadGroup.remove(tile.roadMesh);
+  const signature = `${tile.roadTier}:${tile.roadMask}`;
+  if (tile.road && tile.roadMesh?.userData.signature === signature) return;
+  if (tile.roadMesh) disposeLocalObject(tile.roadMesh);
   if (!tile.road) {
     tile.roadMesh = null;
     return;
@@ -1001,6 +1085,7 @@ function createRoadMesh(tile) {
   const { x, z } = gridToWorld(tile.x, tile.z);
   group.position.set(x, 0, z);
   group.userData.tile = tile;
+  group.userData.signature = signature;
   tile.roadMesh = group;
   roadGroup.add(group);
 }
@@ -1034,7 +1119,7 @@ function configurePixelTexture(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;
-  texture.needsUpdate = true;
+  if (texture.image) texture.needsUpdate = true;
   return texture;
 }
 
@@ -1225,9 +1310,12 @@ function setBuildingLevelVisual(building) {
   }
   badge.visible = level > 1;
   badge.scale.setScalar(0.8 + level * 0.16);
+  worldArt?.decorateBuilding(building.mesh, building.type, building.x, building.z, level);
 }
 
 function canBuild(type, tile) {
+  if (!Object.hasOwn(BUILDINGS, type)) return { ok: false, reason: "请选择有效的建造工具。" };
+  if (!Object.hasOwn(ROAD_TIERS, city.selectedRoadTier)) return { ok: false, reason: "请选择有效的道路类型。" };
   if (!tile) return { ok: false, reason: "请选择地图格子。" };
   if (type === "bulldoze") return tile.road || tile.buildingId ? { ok: true } : { ok: false, reason: "这里没有可拆除的内容。" };
   const unlock = unlockState(type);
@@ -1329,6 +1417,9 @@ function serializeGame() {
         active: building.active !== false,
       })),
       week: city.week,
+      population: city.stats.population,
+      demo: city.demo ? JSON.parse(JSON.stringify(city.demo)) : null,
+      life: JSON.parse(JSON.stringify(city.life || normalizeTownLife())),
       money: city.stats.money,
       chapterIndex: city.chapterIndex,
       completedChapters: [...city.completedChapters],
@@ -1350,7 +1441,7 @@ function serializeGame() {
 function migrateSave(rawSave) {
   if (!rawSave || typeof rawSave !== "object") return null;
   if (rawSave.version === SAVE_VERSION) return rawSave;
-  if (rawSave.version === 1 && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
+  if ((rawSave.version === 1 || rawSave.version === 2) && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
   if (!rawSave.version && rawSave.city) return { ...rawSave, version: SAVE_VERSION };
   return null;
 }
@@ -1384,13 +1475,11 @@ function clearCityContent() {
     tile.coverageRoutes = {};
     tile.pollution = 0;
     if (tile.roadMesh) {
-      roadGroup.remove(tile.roadMesh);
+      disposeLocalObject(tile.roadMesh);
       tile.roadMesh = null;
     }
   });
-  buildingGroup.clear();
-  agentGroup.clear();
-  effectGroup.clear();
+  [...buildingGroup.children, ...agentGroup.children, ...effectGroup.children].forEach(disposeLocalObject);
   city.buildings = [];
   city.residents = [];
   city.visualAgents = [];
@@ -1398,7 +1487,40 @@ function clearCityContent() {
   city.roadVersion += 1;
 }
 
+function validateSave(save) {
+  const migrated = migrateSave(save);
+  const data = migrated?.city;
+  if (!data || typeof data !== 'object' || !Array.isArray(data.tiles) || !Array.isArray(data.buildings)) return false;
+  if (data.tiles.length + data.buildings.length > GRID_SIZE * GRID_SIZE) return false;
+  if (data.money !== undefined && (!Number.isFinite(data.money) || Math.abs(data.money) > 1e12)) return false;
+  if (data.week !== undefined && (!Number.isInteger(data.week) || data.week < 1 || data.week > 1000000)) return false;
+  if (data.population !== undefined && (!Number.isInteger(data.population) || data.population < 0 || data.population > 25000)) return false;
+  for (const key of ['upgradeCount', 'manualSaveCount']) if (data[key] !== undefined && (!Number.isInteger(data[key]) || data[key] < 0 || data[key] > 1000000)) return false;
+  if (data.modifiers !== undefined && (!data.modifiers || typeof data.modifiers !== 'object' || Object.values(data.modifiers).some((v) => !Number.isFinite(v) || Math.abs(v) > 1000))) return false;
+  if (data.chapterIndex !== undefined && (!Number.isInteger(data.chapterIndex) || data.chapterIndex < 0 || data.chapterIndex >= CHAPTERS.length)) return false;
+  if (data.history !== undefined && (!Array.isArray(data.history) || data.history.length > 1000 || data.history.some((row) => !row || typeof row !== 'object' || Object.values(row).some((v) => !Number.isFinite(v))))) return false;
+  const occupied = new Set();
+  for (const item of [...data.tiles, ...data.buildings]) {
+    if (!item || !inBounds(item.x, item.z)) return false;
+    const key = `${item.x},${item.z}`;
+    if (occupied.has(key)) return false;
+    occupied.add(key);
+  }
+  if (data.buildings.some((b) => !Object.hasOwn(BUILDINGS, b.type) || ['road', 'bulldoze'].includes(b.type))) return false;
+  if (data.tiles.some(t => t.roadTier !== undefined && !Object.hasOwn(ROAD_TIERS, t.roadTier))) return false;
+  const buildingIds = new Set();
+  for (const building of data.buildings) {
+    if (building.id === undefined) continue;
+    if (typeof building.id !== 'string' || !building.id.length || building.id.length > 128 || buildingIds.has(building.id)) return false;
+    buildingIds.add(building.id);
+  }
+  if (data.buildings.some((b) => (b.level !== undefined && (!Number.isInteger(b.level) || b.level < 1 || b.level > MAX_BUILDING_LEVEL)) || (b.age !== undefined && (!Number.isFinite(b.age) || b.age < 0)))) return false;
+  if (data.demo !== undefined && data.demo !== null && !normalizeDemoState(data.demo)) return false;
+  return true;
+}
+
 function applySave(save) {
+  if (!validateSave(save)) return false;
   const migrated = migrateSave(save);
   if (!migrated) return false;
   const data = migrated.city || {};
@@ -1406,12 +1528,15 @@ function applySave(save) {
   city.week = Math.max(1, data.week || 1);
   city.weekProgress = 0;
   city.stats.money = Number.isFinite(data.money) ? data.money : INITIAL_MONEY;
+  city.stats.population = clamp(Number.isFinite(data.population) ? data.population : 0, 0, 25000);
+  city.demo = normalizeDemoState(data.demo);
+  city.life = normalizeTownLife(data.life);
   city.chapterIndex = clamp(data.chapterIndex || 0, 0, CHAPTERS.length - 1);
-  city.completedChapters = Array.isArray(data.completedChapters) ? [...data.completedChapters] : [];
-  city.activeEvents = Array.isArray(data.activeEvents) ? data.activeEvents.map((event) => ({ ...event })) : [];
-  city.eventCooldowns = data.eventCooldowns && typeof data.eventCooldowns === "object" ? { ...data.eventCooldowns } : {};
-  city.unlockedAchievements = Array.isArray(data.unlockedAchievements) ? [...data.unlockedAchievements] : [];
-  city.appliedBonuses = Array.isArray(data.appliedBonuses) ? [...data.appliedBonuses] : [];
+  city.completedChapters = Array.isArray(data.completedChapters) ? [...new Set(data.completedChapters.filter(i => Number.isInteger(i) && i >= 0 && i < CHAPTERS.length))] : [];
+  city.activeEvents = Array.isArray(data.activeEvents) ? data.activeEvents.filter((event) => EVENT_DEFINITIONS.some((d) => d.id === event?.id)).map((event) => ({ id: event.id, weeksLeft: clamp(Number(event.weeksLeft) || 1, 1, 30) })) : [];
+  city.eventCooldowns = Object.fromEntries(EVENT_DEFINITIONS.filter(e => Number.isFinite(data.eventCooldowns?.[e.id]) && data.eventCooldowns[e.id] > 0).map(e => [e.id, Math.min(1000, Math.floor(data.eventCooldowns[e.id]))]));
+  city.unlockedAchievements = Array.isArray(data.unlockedAchievements) ? data.unlockedAchievements.filter((id) => ACHIEVEMENTS.some((a) => a.id === id)) : [];
+  city.appliedBonuses = Array.isArray(data.appliedBonuses) ? [...new Set(data.appliedBonuses.filter(id => CHAPTERS.some(c => c.bonus?.id === id)))] : [];
   city.modifiers = {
     upgradeDiscount: clamp(data.modifiers?.upgradeDiscount || 0, 0, 0.5),
     trafficBonus: data.modifiers?.trafficBonus || 0,
@@ -1422,6 +1547,7 @@ function applySave(save) {
   city.upgradeCount = data.upgradeCount || 0;
   city.undoStack = [];
   city.settings = {
+    performance: Object.hasOwn(PERFORMANCE_MODES, data.settings?.performance) ? data.settings.performance : 'eco',
     muted: Boolean(data.settings?.muted),
     volume: clamp(Number.isFinite(data.settings?.volume) ? data.settings.volume : city.settings.volume, 0, 1),
     music: data.settings?.music !== false,
@@ -1435,7 +1561,7 @@ function applySave(save) {
     const tile = getTile(road.x, road.z);
     if (!tile) return;
     tile.road = true;
-    tile.roadTier = ROAD_TIERS[road.roadTier] ? road.roadTier : "lane";
+    tile.roadTier = Object.hasOwn(ROAD_TIERS, road.roadTier) ? road.roadTier : "lane";
     tile.type = "road";
   });
   refreshRoadMeshes();
@@ -1472,11 +1598,12 @@ function applySave(save) {
   city.saveStatus = `已读取 ${new Date(migrated.savedAt || Date.now()).toLocaleString()}`;
   city.lastSaveAt = migrated.savedAt || null;
   city.selectedTile = null;
+  setViewMode(city.demo?.view || 'normal');
   return true;
 }
 
 function saveGame(manual = false) {
-  if (manual) city.manualSaveCount += 1;
+  if (manual) { city.manualSaveCount += 1; updateAchievements(); }
   const save = serializeGame();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -1505,10 +1632,11 @@ function loadGameFromStorage() {
     if (!loaded) throw new Error("Save migration failed");
     return true;
   } catch (error) {
-    localStorage.removeItem(SAVE_KEY);
+    let storageAvailable = true;
+    try { localStorage.removeItem(SAVE_KEY); } catch { storageAvailable = false; }
     startNewGame({ keepStorage: true });
-    city.saveStatus = "存档损坏，已开启新游戏";
-    addMessage("检测到本地存档损坏，已自动移除并开启新游戏。");
+    city.saveStatus = storageAvailable ? "存档损坏，已开启新游戏" : "本地存储不可用，请导出备份";
+    addMessage(storageAvailable ? "检测到本地存档损坏，已自动移除并开启新游戏。" : "浏览器不允许本地保存，仍可游玩。离开前请导出城镇备份。");
     renderUI();
     return true;
   }
@@ -1516,6 +1644,9 @@ function loadGameFromStorage() {
 
 function updateSettings(partial) {
   city.settings = { ...city.settings, ...partial };
+  if (!Object.hasOwn(PERFORMANCE_MODES, city.settings.performance)) city.settings.performance = 'eco';
+  const resolution = Math.min(window.devicePixelRatio, PERFORMANCE_MODES[city.settings.performance].resolution);
+  if (renderer.getPixelRatio() !== resolution) renderer.setPixelRatio(resolution);
   city.settings.volume = clamp(city.settings.volume, 0, 1);
   if (city.settings.volume <= 0) city.settings.muted = true;
   syncMusic();
@@ -1560,7 +1691,7 @@ function centerCamera() {
 function undoLastAction() {
   const entry = city.undoStack.pop();
   const remaining = [...city.undoStack];
-  if (!entry) {
+  if (!entry || entry.save.city.week !== city.week) {
     addMessage("没有可以撤销的建造操作。");
     playSound("warning");
     renderUI();
@@ -1584,6 +1715,8 @@ function undoLastAction() {
 }
 
 function resetMetaState() {
+  city.demo = null;
+  city.life = normalizeTownLife();
   city.selectedTool = "road";
   city.selectedRoadTier = "lane";
   city.selectedTile = null;
@@ -1670,7 +1803,12 @@ function spawnBubble(text, x, z, color = 0xffb85f) {
   sprite.position.set(worldPos.x, 2.4, worldPos.z);
   sprite.scale.set(3.5, 1.3, 1);
   sprite.userData.age = 0;
-  effectGroup.add(sprite);
+  addEffect(sprite);
+}
+
+function addEffect(effect) {
+  while (effectGroup.children.length >= 96) disposeLocalObject(effectGroup.children[0]);
+  effectGroup.add(effect);
 }
 
 function spawnRing(x, z, color = 0xffd36f, radius = 1.45) {
@@ -1683,7 +1821,7 @@ function spawnRing(x, z, color = 0xffd36f, radius = 1.45) {
   ring.rotation.x = Math.PI / 2;
   ring.userData = { age: 0, kind: "ring", duration: 1.1, baseScale: 0.35 };
   ring.scale.setScalar(0.35);
-  effectGroup.add(ring);
+  addEffect(ring);
 }
 
 function spawnConstructionEffect(x, z) {
@@ -1693,7 +1831,7 @@ function spawnConstructionEffect(x, z) {
     beam.position.set(worldPos.x + (i % 2 ? 0.58 : -0.58), 0.48, worldPos.z + (i < 2 ? 0.52 : -0.52));
     beam.rotation.y = i * Math.PI * 0.18;
     beam.userData = { age: 0, kind: "construction", duration: 1.15, drift: 0.1 + i * 0.03 };
-    effectGroup.add(beam);
+    addEffect(beam);
   }
   spawnRing(x, z, 0xffd36f, 1.25);
 }
@@ -1717,7 +1855,7 @@ function spawnParticleBurst(label, x, z, material, count = 8) {
       duration: 1.05,
       velocity: new THREE.Vector3(Math.cos(angle) * 0.72, 0.88 + (i % 3) * 0.16, Math.sin(angle) * 0.72),
     };
-    effectGroup.add(particle);
+    addEffect(particle);
   }
 }
 
@@ -1732,10 +1870,10 @@ function spawnPopulationEffect(delta) {
 }
 
 function spawnChapterCelebration(title) {
-  spawnBubble("章节完成", 9, 9, 0xffb85f);
+  spawnBubble(title.includes('祭典') ? '春日祭典' : title.includes('章') ? '章节完成' : '收到感谢信', 9, 9, 0xffb85f);
   spawnBubble(title.includes("：") ? title.split("：").pop() : title, 8, 10, 0x5aa27d);
   cameraTarget.set(0, 0, 0);
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < (TEST_MODE ? 3 : 7); i += 1) {
     window.setTimeout(() => {
       const x = 5 + Math.random() * 8;
       const z = 6 + Math.random() * 6;
@@ -1835,7 +1973,7 @@ function bulldoze(tile) {
     if (building) {
       const config = BUILDINGS[building.type];
       city.stats.money += Math.round(config.cost * 0.35);
-      buildingGroup.remove(building.mesh);
+      disposeLocalObject(building.mesh);
       city.buildings = city.buildings.filter((item) => item.id !== building.id);
       city.residents = city.residents.filter((resident) => resident.homeId !== building.id && resident.destinationId !== building.id);
       spawnBubble("拆除", tile.x, tile.z, 0xee6b6e);
@@ -1993,10 +2131,11 @@ function pathKey(start, end) {
 }
 
 function findPath(start, end, options = {}) {
-  const cacheable = !options.maxCost;
+  const cacheable = true;
   if (!start || !end) return null;
-  const key = pathKey(start, end);
+  const key = `${pathKey(start, end)}:${options.maxCost || 'unlimited'}`;
   if (cacheable && city.pathCache.has(key)) return city.pathCache.get(key);
+  if (city.pathCache.size >= 2048) city.pathCache.delete(city.pathCache.keys().next().value);
 
   const open = [{ tile: start, g: 0, f: distance(start, end), parent: null }];
   const best = new Map([[`${start.x},${start.z}`, 0]]);
@@ -2098,7 +2237,8 @@ function updateTrafficStats() {
   city.stats.traffic = clamp(100 - avg * 40);
 }
 
-function computeStats() {
+function computeStats({ growPopulation = false } = {}) {
+  lifeEffects = townLifeEffects(city.life);
   spreadCoverage();
   refreshRoadMasks();
   const activeBuildings = city.buildings.filter((building) => hasAdjacentRoad(getTile(building.x, building.z)));
@@ -2128,7 +2268,7 @@ function computeStats() {
   const baseHappiness = city.stats.happiness || 68;
   const targetPopulation = Math.round(capacity * clamp((baseHappiness - 22) / 68, 0.08, 1));
   const populationStep = Math.sign(targetPopulation - city.stats.population) * Math.min(Math.abs(targetPopulation - city.stats.population), GAME_BALANCE.residentialGrowthStep);
-  const nextPopulation = Math.max(0, city.stats.population + populationStep);
+  const nextPopulation = Math.max(0, Math.min(capacity, city.stats.population + (growPopulation ? populationStep : 0)));
   syncResidents(nextPopulation, residential);
 
   const routeStats = assignResidentRoutes(residential, destinations);
@@ -2162,7 +2302,7 @@ function computeStats() {
   const zoningBoost = residential.length ? (residentialScore - 62) * 0.08 : 0;
   const utilityPenalty = Math.max(0, 100 - power) * 0.09 + Math.max(0, 100 - water) * 0.09;
   const jobPenalty = city.residents.length > 0 ? Math.max(0, 78 - employmentRate) * 0.2 : 4;
-  const transportRelief = transport * 0.08 + city.modifiers.trafficBonus;
+  const transportRelief = transport * 0.08 + city.modifiers.trafficBonus + lifeEffects.traffic;
   const trafficPenalty = Math.max(0, 76 - city.stats.traffic - transportRelief) * 0.24 + routeStats.unreachableResidents * 0.45;
   const pollutionPenalty = Math.min(24, pollution * 0.16);
   const impact = eventImpact();
@@ -2176,11 +2316,14 @@ function computeStats() {
     industrial.reduce((sum, building) => sum + buildingValue(building, "tax") * 8 * incomeEfficiency * industrialLocationMultiplier, 0);
   const roadMaintenance = roads.reduce((sum, tile) => sum + ROAD_TIERS[tile.roadTier].maintenance, 0);
   const maintenance = roadMaintenance + activeBuildings.reduce((sum, building) => sum + buildingValue(building, "maintenance"), 0);
-  const adjustedIncome = income * impact.incomeMultiplier + impact.incomeDelta;
-  const adjustedMaintenance = maintenance + impact.maintenanceDelta;
+  const demoPolicy = demoEconomy(city.demo);
+  const adjustedIncome = (income * impact.incomeMultiplier + impact.incomeDelta) * demoPolicy.income;
+  const adjustedMaintenance = (maintenance * lifeEffects.maintenance + impact.maintenanceDelta) * demoPolicy.maintenance + demoPolicy.upkeep;
   const fiscal = fiscalHealth({ money: city.stats.money, income: adjustedIncome, maintenance: adjustedMaintenance });
   const happinessReasons = [
     impactItem("base", "基础生活", GAME_BALANCE.baseHappiness, "positive"),
+    impactItem("demo-policy", "小镇政策", demoPolicy.happiness, demoPolicy.happiness >= 0 ? "positive" : "negative"),
+    impactItem("community", "社区共建", lifeEffects.happiness, "positive"),
     impactItem("service", "服务与公园", serviceBoost, "positive"),
     impactItem("zoning", "宜居区位", zoningBoost, zoningBoost >= 0 ? "positive" : "negative"),
     impactItem("fiscal", "财政安全", fiscal.happiness, fiscal.happiness >= 0 ? "positive" : "negative"),
@@ -2248,12 +2391,13 @@ function computeStats() {
 }
 
 function advanceWeek(count = 1) {
+  city.undoStack = []; // Construction undo ends at settlement; it must not rewind time or income.
   for (let i = 0; i < count; i += 1) {
     const previousMoney = city.stats.money;
     const previousPopulation = city.stats.population;
     const previousTraffic = city.stats.traffic;
     const previousHappiness = city.stats.happiness;
-    const { income, maintenance } = computeStats();
+    const { income, maintenance } = computeStats({ growPopulation: true });
     city.stats.money += Math.round(income - maintenance);
     city.report.trends = {
       population: trend(city.stats.population, previousPopulation).label,
@@ -2272,15 +2416,15 @@ function advanceWeek(count = 1) {
     city.history = city.history.slice(-24);
     city.week += 1;
     city.bankruptWeeks = city.stats.money < -10000 ? city.bankruptWeeks + 1 : 0;
-    if (city.stats.money > previousMoney) {
+    if (i === count - 1 && city.stats.money > previousMoney) {
       spawnBubble(`+${money(city.stats.money - previousMoney)}`, 9, 9, 0xffb85f);
       spawnIncomeEffect(city.stats.money - previousMoney);
     }
-    if (city.stats.population > previousPopulation) {
+    if (i === count - 1 && city.stats.population > previousPopulation) {
       spawnBubble(`+${city.stats.population - previousPopulation} 人`, 8, 8, 0x5aa27d);
       spawnPopulationEffect(city.stats.population - previousPopulation);
     }
-    playSound(city.bankruptWeeks >= 3 || city.stats.fiscal?.score < 45 ? "warning" : "report");
+    if (i === count - 1) playSound(city.bankruptWeeks >= 3 || city.stats.fiscal?.score < 45 ? "warning" : "report");
 
     if (city.bankruptWeeks >= 6) {
       addMessage("财政连续赤字太久，小镇进入托管状态。拆除高维护设施或等待税收恢复。");
@@ -2290,6 +2434,8 @@ function advanceWeek(count = 1) {
     updateEvents();
     maybeCompleteChapter();
     updateAchievements();
+    townLife?.onWeek();
+    demoController?.onWeek();
     if (!TEST_MODE && city.week - city.lastAutoSaveWeek >= AUTO_SAVE_INTERVAL_WEEKS) saveGame(false);
   }
   refreshVisualAgents();
@@ -2359,7 +2505,7 @@ function renderUI() {
   els.power.textContent = `${Math.round(stats.power)}%`;
   els.water.textContent = `${Math.round(stats.water)}%`;
   els.weekLabel.textContent = `第 ${city.week} 周`;
-  els.calendar.textContent = `${seasons[Math.floor((city.week - 1) / 13) % seasons.length]} 第 ${city.week} 周`;
+  els.calendar.textContent = `${seasons[Math.floor((city.week - 1) / 12) % seasons.length]} 第 ${city.week} 周`;
   els.cityMood.textContent = city.completed ? "庆祝达成" : stats.traffic < 65 ? "交通承压" : stats.happiness > 78 ? "晴朗成长" : stats.happiness > 50 ? "稳步建设" : "需要关照";
   els.goalCard.classList.toggle("is-complete", city.completed);
   els.goalTitle.textContent = city.completed ? "阳光小镇已成型" : chapter.title;
@@ -2476,11 +2622,23 @@ function renderUI() {
     : "暂无成就";
   els.saveStatus.textContent = city.saveStatus;
   els.reportDetails.textContent = `收入 ${money(city.report.income)} / 维护 ${money(city.report.maintenance)} / 净收益 ${money(city.report.net)} / 财政 ${Math.round(stats.fiscal?.score || 0)}% / 储备 ${Math.max(0, Math.round(stats.fiscal?.reserveWeeks || 0))} 周 / 人口 ${city.report.trends.population} / 资金 ${city.report.trends.money} / 交通 ${city.report.trends.traffic} / 幸福 ${city.report.trends.happiness}。`;
+  demoController?.render();
+  townLife?.render();
+  updateHeatmap();
+  updateRoadCongestionVisuals();
+  worldArt?.setOccupied?.(city.tiles);
+  const performanceSelect = document.getElementById('performanceSelect');
+  if (performanceSelect) performanceSelect.value = city.settings.performance;
+  const resolution = Math.min(window.devicePixelRatio, (PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES.eco).resolution);
+  if (renderer.getPixelRatio() !== resolution) renderer.setPixelRatio(resolution);
 }
 
 function updateHover() {
-  if (!city.selectedTile) {
+  if (!city.selectedTile || !pointerOnMap || demoController?.isBlocking()) {
     hoverMesh.visible = false;
+    if (ghost) ghost.visible = false;
+    radiusPreview.visible = false;
+    placementHint.hidden = true;
     return;
   }
   const { x, z } = gridToWorld(city.selectedTile.x, city.selectedTile.z);
@@ -2488,6 +2646,37 @@ function updateHover() {
   hoverMesh.material = check.ok ? hoverMaterial : invalidMaterial;
   hoverMesh.position.set(x, 0.18, z);
   hoverMesh.visible = true;
+  placementHint.hidden = false;
+  placementHint.classList.toggle('invalid', !check.ok);
+  const config = BUILDINGS[city.selectedTool];
+  const hint = check.ok ? `${config.name} · ${money(city.selectedTool === 'road' ? ROAD_TIERS[city.selectedRoadTier].cost : config.cost || 0)}${config.radius ? ` · 覆盖 ${config.radius} 格` : ''}` : check.reason;
+  if (placementHint.textContent !== hint) placementHint.textContent = hint;
+  const showGhost = city.selectedTool !== 'road' && city.selectedTool !== 'bulldoze' && !city.selectedTile.buildingId && !city.selectedTile.road;
+  if (showGhost && ghostType !== city.selectedTool) {
+    if (ghost) disposeLocalObject(ghost);
+    ghost = createBuildingMesh(city.selectedTool);
+    ghostType = city.selectedTool;
+    ghost.traverse((mesh) => {
+      if (!mesh.material) return;
+      const old = mesh.material;
+      mesh.material = new THREE.MeshBasicMaterial({ color: 0x73bd9c, transparent: true, opacity: 0.5, depthWrite: false });
+      old.dispose();
+    });
+    scene.add(ghost);
+  }
+  if (ghost) {
+    ghost.visible = showGhost;
+    ghost.position.set(x, 0.16, z);
+    if (ghost.userData.valid !== check.ok) {
+      ghost.traverse((mesh) => { if (mesh.material) mesh.material.color.setHex(check.ok ? 0x65bf9c : 0xe87b73); });
+      ghost.userData.valid = check.ok;
+    }
+  }
+  radiusPreview.visible = showGhost && Boolean(config.radius);
+  if (radiusPreview.visible) {
+    radiusPreview.position.set(x, 0.28, z);
+    radiusPreview.scale.setScalar(config.radius * TILE_SIZE);
+  }
 }
 
 function setTool(tool) {
@@ -2517,7 +2706,7 @@ function pickTile(event) {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(tileGroup.children, false);
-  return hits[0]?.object.userData.tile || null;
+  return hits[0]?.instanceId !== undefined ? city.tiles[hits[0].instanceId] : hits[0]?.object.userData.tile || null;
 }
 
 function createAgentMesh(kind) {
@@ -2537,23 +2726,28 @@ function createAgentMesh(kind) {
 }
 
 function refreshVisualAgents() {
-  agentGroup.clear();
+  const previous = city.visualAgents;
   city.visualAgents = city.residents
     .filter((resident) => resident.route?.length > 1)
     .slice(0, MAX_VISUAL_AGENTS)
     .map((resident, index) => {
       const kind = resident.route.length > 4 ? "car" : "walker";
-      const mesh = createAgentMesh(kind);
-      agentGroup.add(mesh);
+      let mesh = previous[index]?.kind === kind ? previous[index].mesh : null;
+      if (!mesh) {
+        if (previous[index]) disposeLocalObject(previous[index].mesh);
+        mesh = createAgentMesh(kind);
+        agentGroup.add(mesh);
+      }
       return {
         residentId: resident.id,
         route: resident.route,
         mesh,
         kind,
-        offset: Math.random(),
+        offset: previous[index]?.offset ?? ((index * 0.618) % 1),
         speed: (kind === "car" ? 0.22 : 0.12) * (0.8 + (index % 5) * 0.08),
       };
     });
+  previous.slice(city.visualAgents.length).forEach((agent) => disposeLocalObject(agent.mesh));
 }
 
 function updateVisualAgents(delta) {
@@ -2597,7 +2791,7 @@ function updateEffects(delta) {
       item.position.y += delta * 0.9;
       item.material.opacity = Math.max(0, 1 - item.userData.age * 0.8);
     }
-    if (item.userData.age > duration) effectGroup.remove(item);
+    if (item.userData.age > duration) disposeLocalObject(item);
   }
 }
 
@@ -2617,14 +2811,26 @@ function updateRoadCongestionVisuals() {
 }
 
 canvas.addEventListener("pointerdown", (event) => {
+  if (demoController?.isBlocking()) return;
+  if (event.button !== 0 && event.button !== 2) return;
   drag.active = true;
   drag.moved = false;
   drag.x = event.clientX;
   drag.y = event.clientY;
+  drag.startX = event.clientX;
+  drag.startY = event.clientY;
+  drag.paint = event.button === 0 && event.shiftKey && city.selectedTool === 'road';
+  drag.lastTile = null;
+  drag.initialUndo = drag.paint ? captureUndoState('连续铺路') : null;
+  drag.painted = false;
+  if (drag.paint) paintRoad(pickTile(event));
   canvas.setPointerCapture(event.pointerId);
 });
 
 canvas.addEventListener("pointermove", (event) => {
+  pointerOnMap = true;
+  placementHint.style.left = `${Math.min(window.innerWidth - 350, event.clientX + 20)}px`;
+  placementHint.style.top = `${Math.min(window.innerHeight - 120, event.clientY + 24)}px`;
   const tile = pickTile(event);
   if (tile) {
     city.selectedTile = tile;
@@ -2635,9 +2841,10 @@ canvas.addEventListener("pointermove", (event) => {
   }
 
   if (!drag.active) return;
+  if (drag.paint) { paintRoad(tile); return; }
   const dx = event.clientX - drag.x;
   const dy = event.clientY - drag.y;
-  if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
+  if (Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY) > 5) drag.moved = true;
   cameraTarget.x -= dx * 0.035;
   cameraTarget.z -= dy * 0.035;
   clampCameraTarget();
@@ -2647,10 +2854,41 @@ canvas.addEventListener("pointermove", (event) => {
 
 canvas.addEventListener("pointerup", (event) => {
   const tile = pickTile(event);
-  if (tile && !drag.moved) place(city.selectedTool, tile.x, tile.z);
+  if (!drag.active) return;
+  if (drag.paint && drag.painted && drag.initialUndo.save.city.week === city.week) city.undoStack = [drag.initialUndo];
+  const placed = tile && !drag.moved && !drag.paint && event.button === 0 && place(city.selectedTool, tile.x, tile.z);
   drag.active = false;
   canvas.releasePointerCapture(event.pointerId);
+  if (placed || drag.painted) { computeStats(); refreshVisualAgents(); }
+  renderUI();
 });
+
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+canvas.addEventListener('pointerleave', () => { pointerOnMap = false; updateHover(); });
+function cancelPointerGesture() {
+  if (drag.active && drag.paint && drag.painted) {
+    if (drag.initialUndo.save.city.week === city.week) city.undoStack = [drag.initialUndo];
+    computeStats();
+    refreshVisualAgents();
+  }
+  drag.active = false;
+  pointerOnMap = false;
+  updateHover();
+  renderUI();
+}
+canvas.addEventListener('pointercancel', cancelPointerGesture);
+canvas.addEventListener('lostpointercapture', () => { if (drag.active) cancelPointerGesture(); });
+function paintRoad(tile) {
+  if (!tile) return;
+  const previous = drag.lastTile || tile;
+  const path = [];
+  let x = previous.x, z = previous.z;
+  while (x !== tile.x) { x += Math.sign(tile.x - x); path.push(getTile(x, z)); }
+  while (z !== tile.z) { z += Math.sign(tile.z - z); path.push(getTile(x, z)); }
+  path.push(tile);
+  for (const step of path) if (canBuild('road', step).ok && place('road', step.x, step.z)) drag.painted = true;
+  drag.lastTile = tile;
+}
 
 canvas.addEventListener(
   "wheel",
@@ -2682,6 +2920,10 @@ els.musicButton.addEventListener("click", () => {
 els.volumeSlider.addEventListener("input", () => {
   updateSettings({ volume: Number(els.volumeSlider.value) / 100, muted: Number(els.volumeSlider.value) <= 0 });
 });
+document.getElementById('performanceSelect')?.addEventListener('change', (event) => {
+  updateSettings({ performance: event.target.value });
+  saveGame(false);
+});
 els.shortcutHelpButton.addEventListener("click", () => {
   updateSettings({ shortcutHelp: !city.settings.shortcutHelp });
   playSound("ui");
@@ -2696,19 +2938,20 @@ els.helpCloseButton.addEventListener("click", () => {
 });
 els.saveButton.addEventListener("click", () => saveGame(true));
 els.newGameButton.addEventListener("click", () => {
-  if (!window.confirm("开始新游戏会覆盖当前未保存进度，确定继续吗？")) return;
-  startNewGame();
-  saveGame(true);
+  demoController?.setWelcome(true);
 });
 els.resetButton.addEventListener("click", () => {
-  if (!window.confirm("清除本地存档并重新开始？")) return;
-  startNewGame();
-  addMessage("本地存档已清除，已开启新的晴日港。");
-  renderUI();
+  demoController?.confirm("清除本地存档", "这会清除当前浏览器里的城镇。建议先导出一份存档，之后仍可导入继续。", "清除并返回菜单", () => {
+    startNewGame();
+    demoController.setWelcome(true);
+  });
 });
 els.upgradeButton.addEventListener("click", () => upgradeSelectedBuilding());
 
 window.addEventListener("keydown", (event) => {
+  if (graphicsLost) return;
+  if (demoController?.isBlocking()) return;
+  if (event.defaultPrevented) return;
   if (
     event.target instanceof HTMLInputElement ||
     event.target instanceof HTMLTextAreaElement ||
@@ -2797,6 +3040,8 @@ function resize() {
 }
 
 function animateScene(elapsed, delta) {
+  const frameTime = performance.now() / 1000;
+  worldArt?.update(delta, { week: city.week, festival: Boolean(city.demo?.festival) });
   camera.position.x += (cameraTarget.x + 29 - camera.position.x) * 0.08;
   camera.position.z += (cameraTarget.z + 34 - camera.position.z) * 0.08;
   camera.lookAt(cameraTarget.x, 0, cameraTarget.z);
@@ -2823,14 +3068,14 @@ function animateScene(elapsed, delta) {
     }
   });
   buildingGroup.children.forEach((mesh, index) => {
-    const age = Math.max(0, elapsed - (mesh.userData.birth || 0));
+    const age = Math.max(0, frameTime - (mesh.userData.birth || 0));
     const bounce = age < 0.65 ? 1 + Math.sin(age * Math.PI * 4) * (1 - age / 0.65) * 0.18 : 1;
-    mesh.scale.lerp(new THREE.Vector3(bounce, bounce, bounce), 0.18);
+    const scale = (1 + ((mesh.userData.level || 1) - 1) * 0.12) * bounce;
+    mesh.scale.lerp(animatedScale.setScalar(scale), 0.18);
     mesh.position.y = 0.1 + Math.sin(elapsed * 1.4 + index) * 0.008;
   });
   updateVisualAgents(delta);
   updateEffects(delta);
-  updateRoadCongestionVisuals();
 }
 
 function seedTown() {
@@ -2848,21 +3093,48 @@ function seedTown() {
   addMessage("晴日港有了一条主街。接下来补上电力、水塔和更多住宅吧。");
 }
 
+function seedScenario(id, scenario) {
+  const settings = { ...city.settings, helpOpen: false };
+  resetMetaState();
+  const tiles = [];
+  for (let x = 4; x <= 13; x += 1) tiles.push({ x, z: 9, roadTier: x >= 7 && x <= 10 ? 'avenue' : 'lane' });
+  for (let z = 5; z <= 13; z += 1) if (z !== 9) tiles.push({ x: 8, z, roadTier: 'lane' });
+  const homes = id === 'commerce' ? [[6, 8], [7, 7], [7, 6]] : [[6, 8], [7, 7], [7, 8]];
+  const buildings = homes.map(([x,z]) => ({ type: 'residential', x, z, level: 1, age: 2 }));
+  buildings.push({ type: 'commercial', x: 9, z: 8, level: 1, age: 2 }, { type: 'power', x: 9, z: 6, level: 1, age: 2 });
+  if (id === 'garden') buildings.push({ type: 'park', x: 7, z: 10, level: 1 });
+  if (id === 'commerce') buildings.push({ type: 'commercial', x: 10, z: 8, level: 1 });
+  const snapshot = { version: SAVE_VERSION, city: { tiles, buildings, week: 1, money: scenario.money, population: 20, settings, demo: { scenario: id } } };
+  applySave(snapshot);
+  city.stats.money = scenario.money;
+  city.undoStack = [];
+  city.messages = [`欢迎来到${scenario.town}。${scenario.tagline}`];
+  cameraTarget.set(0, 0, 0);
+  setCameraZoom(1.1);
+}
+
 function bootGame() {
   preloadManifestTextures();
-  createPetals();
+  cloudGroup.visible = false;
+  worldArt = createWorldArt({ THREE, scene, gridSize: GRID_SIZE, tileSize: TILE_SIZE });
   createTiles();
   const loaded = !TEST_MODE && loadGameFromStorage();
   if (!loaded) startNewGame({ keepStorage: TEST_MODE });
   syncMusic();
   renderUI();
   exposeTestApi();
+  demoController = createDemoController({ city, seedScenario, renderUI, recompute: () => { computeStats(); refreshVisualAgents(); }, setTool, setRoadTier, setViewMode, addMessage, celebrate: spawnChapterCelebration, serializeGame, saveGame, validateSave, loadSave: applySave, isGraphicsLost: () => graphicsLost, hasSave: () => { try { return Boolean(localStorage.getItem(SAVE_KEY)); } catch { return false; } } });
+  demoController.boot({ testMode: TEST_MODE });
+  townLife = createTownLife({ city, isConnected: b => hasAdjacentRoad(getTile(b.x, b.z)), recompute: () => { computeStats(); refreshVisualAgents(); }, save: () => saveGame(false), render: renderUI, addMessage, toast: message => demoController.toast(message), confirm: (...args) => demoController.confirm(...args), celebrate: spawnChapterCelebration });
+  renderUI();
+  if (TEST_MODE) window.sunnyTownTest.demo = demoController;
+  if (TEST_MODE) window.sunnyTownTest.life = townLife;
 }
 
 function exposeTestApi() {
   if (!TEST_MODE) return;
   window.sunnyTownTest = {
-    place,
+    place: (...args) => { const result = place(...args); if (result) { computeStats(); refreshVisualAgents(); renderUI(); } return result; },
     advanceWeek,
     saveGame,
     loadSave: applySave,
@@ -2878,8 +3150,13 @@ function exposeTestApi() {
     getState: () => ({
       version: GAME_VERSION,
       saveVersion: SAVE_VERSION,
+      demo: city.demo ? JSON.parse(JSON.stringify(city.demo)) : null,
+      art: worldArt?.stats(),
+      rendering: { calls: renderer.info.render.calls, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, ...frameStats, graphicsLost, pixelRatio: renderer.getPixelRatio() },
       stats: { ...city.stats },
       week: city.week,
+      weekProgress: city.weekProgress,
+      paused: city.paused,
       chapterIndex: city.chapterIndex,
       completed: city.completed,
       saveStatus: city.saveStatus,
@@ -2975,22 +3252,96 @@ window.addEventListener("resize", resize);
 resize();
 bootGame();
 
-const clock = new THREE.Clock();
+let frameTimer = null;
+let frameRequest = null;
+let lastFrameAt = performance.now();
+let animationElapsed = 0;
 
 function animate() {
-  const delta = Math.min(clock.getDelta(), 0.1);
-  const elapsed = clock.elapsedTime;
-  if (!city.paused) {
+  if (graphicsLost) return;
+  if (document.hidden) { frameStats.hidden = true; return; }
+  const started = performance.now();
+  const delta = Math.min((started - lastFrameAt) / 1000, 0.15);
+  lastFrameAt = started;
+  animationElapsed += delta;
+  if (!city.paused && !demoController?.isBlocking() && !drag.active) {
     city.weekProgress += delta * city.speed;
-    if (city.weekProgress >= WEEK_SECONDS) {
-      city.weekProgress -= WEEK_SECONDS;
+    const weekDuration = city.demo ? 7 : WEEK_SECONDS;
+    if (city.weekProgress >= weekDuration) {
+      city.weekProgress -= weekDuration;
       advanceWeek();
     }
   }
-  animateScene(elapsed, delta);
+  animateScene(animationElapsed, delta);
   updateHover();
   renderer.render(scene, camera);
-  requestAnimationFrame(animate);
+  frameStats.frames += 1;
+  frameStats.cpuMs = Math.round((frameStats.cpuMs * 0.8 + (performance.now() - started) * 0.2) * 100) / 100;
+  const mode = PERFORMANCE_MODES[city.settings.performance] || PERFORMANCE_MODES.eco;
+  frameStats.targetFps = demoController?.isBlocking() ? 1 : city.paused ? Math.min(10, mode.fps) : mode.fps;
+  frameTimer = setTimeout(() => { frameRequest = requestAnimationFrame(animate); }, Math.max(0, 1000 / frameStats.targetFps - (performance.now() - started)));
 }
 
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(frameTimer);
+  cancelAnimationFrame(frameRequest);
+  frameStats.hidden = document.hidden;
+  if (document.hidden) {
+    if (drag.active) cancelPointerGesture();
+    stopMusic();
+    audioContext?.suspend();
+  } else {
+    lastFrameAt = performance.now();
+    if (!graphicsLost && !city.settings.muted) audioContext?.resume().catch(() => {});
+    syncMusic();
+    frameRequest = requestAnimationFrame(animate);
+  }
+});
+window.addEventListener('pagehide', () => { clearTimeout(frameTimer); cancelAnimationFrame(frameRequest); });
+window.addEventListener('pageshow', event => {
+  if (event.persisted && !document.hidden) {
+    clearTimeout(frameTimer);
+    cancelAnimationFrame(frameRequest);
+    lastFrameAt = performance.now();
+    frameRequest = requestAnimationFrame(animate);
+  }
+});
+
+const graphicsDialog = document.createElement('dialog');
+graphicsDialog.id = 'graphicsRecovery';
+graphicsDialog.className = 'graphics-recovery';
+graphicsDialog.setAttribute('aria-labelledby', 'graphicsRecoveryTitle');
+graphicsDialog.innerHTML = '<span>晴日建设课</span><h2 id="graphicsRecoveryTitle">画面暂时中断，小镇已暂停</h2><p id="graphicsRecoveryStatus" role="status">浏览器的图形连接中断了。当前城镇仍在内存中，时间和资金不会继续变化。</p><div><button id="retryGraphics" type="button">尝试恢复画面</button><button id="backupGraphics" type="button">导出城镇备份</button><button id="reloadGraphics" type="button">保存后刷新</button></div><small>如果反复出现，请检查浏览器硬件加速设置，或换一个支持 WebGL 2 的浏览器。</small>';
+document.body.append(graphicsDialog);
+const graphicsExtension = renderer.getContext().getExtension('WEBGL_lose_context');
+graphicsDialog.addEventListener('cancel', event => event.preventDefault());
+document.getElementById('retryGraphics').onclick = () => {
+  document.getElementById('graphicsRecoveryStatus').textContent = '已请求恢复画面。如果仍没有恢复，可以先导出备份，或保存后刷新。';
+  try { graphicsExtension?.restoreContext(); } catch { /* The driver may not yet permit restoration. */ }
+};
+document.getElementById('backupGraphics').onclick = () => document.getElementById('exportSaveButton').click();
+document.getElementById('reloadGraphics').onclick = () => {
+  if (saveGame(false)) location.reload();
+  else document.getElementById('graphicsRecoveryStatus').textContent = '浏览器未能保存。请先用「导出城镇备份」保留进度，再刷新页面。';
+};
+canvas.addEventListener('webglcontextlost', event => {
+  event.preventDefault();
+  graphicsLost = true;
+  clearTimeout(frameTimer);
+  cancelAnimationFrame(frameRequest);
+  if (drag.active) cancelPointerGesture();
+  stopMusic();
+  audioContext?.suspend().catch(() => {});
+  if (!graphicsDialog.open) graphicsDialog.showModal();
+});
+canvas.addEventListener('webglcontextrestored', () => {
+  graphicsLost = false;
+  graphicsDialog.close();
+  lastFrameAt = performance.now();
+  clearTimeout(frameTimer);
+  cancelAnimationFrame(frameRequest);
+  syncMusic();
+  if (!document.hidden) frameRequest = requestAnimationFrame(animate);
+  demoController?.toast('画面恢复了，继续照顾小镇吧。');
+});
 animate();

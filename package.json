@@ -1,7 +1,7 @@
 {
   "name": "sunny-town-story",
-  "version": "1.0.0-rc.1",
-  "description": "A sunny Japanese-inspired 3D casual town builder.",
+  "version": "1.0.0-demo.3",
+  "description": "A cozy Chinese 3D town builder with resident letters, seasonal activities, and community projects.",
   "main": "app.py",
   "scripts": {
     "assets:textures": "tools\\node-shim.cmd tools\\generate-textures.js",
@@ -14,9 +14,18 @@
     "serve": "tools\\node-shim.cmd tools\\serve.js",
     "start": "tools\\node-shim.cmd tools\\start-server.js",
     "test": "tools\\node-shim.cmd tools\\run-tests.js",
+    "test:server": "tools\\node-shim.cmd --test tools\\package-server.test.js",
     "test:visual": "tools\\node-shim.cmd tools\\run-tests.js tests/visual.spec.js"
   },
-  "keywords": [],
+  "keywords": ["city-builder", "cozy-game", "simulation-game", "threejs", "webgl", "chinese"],
+  "homepage": "https://github.com/ZhongH1216/sunny-town-story#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhongH1216/sunny-town-story.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ZhongH1216/sunny-town-story/issues"
+  },
   "author": "",
   "license": "MIT",
   "type": "commonjs",

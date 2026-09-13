@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 开发与贡献说明
+    url: https://github.com/ZhongH1216/sunny-town-story/blob/main/docs/DEVELOPMENT.md
+    about: 查看开发环境、源码结构、验证命令和渲染后端说明。

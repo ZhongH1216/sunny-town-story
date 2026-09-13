@@ -1,12 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const net = require("node:net");
 const { spawn } = require("node:child_process");
 const { root, resolveNpm } = require("./env");
 
 const cleanRoot = path.join(root, "dist", "clean-source-check");
 const cleanProject = path.join(cleanRoot, "sunny-town-story");
 
-const excludedDirs = new Set([".git", "dist", "node_modules", "playwright-report", "test-results", "__pycache__"]);
+const excludedDirs = new Set([".git", ".agents", ".codex", "dist", "node_modules", "playwright-report", "test-results", "__pycache__"]);
 const excludedFiles = new Set([".env", "debug.log", "server.out.log", "server.err.log", "server.pid"]);
 
 function ensureDir(dir) {
@@ -14,6 +15,12 @@ function ensureDir(dir) {
 }
 
 function emptyDir(dir) {
+  const relative = path.relative(path.join(root, "dist"), path.resolve(dir));
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Unsafe clean-source target");
+  if (fs.existsSync(dir)) {
+    const actual = path.relative(fs.realpathSync(root), fs.realpathSync(dir));
+    if (!actual || actual.startsWith("..") || path.isAbsolute(actual)) throw new Error("Clean-source target escapes workspace");
+  }
   if (!fs.existsSync(dir)) {
     ensureDir(dir);
     return;
@@ -26,6 +33,7 @@ function emptyDir(dir) {
 function copyTree(source, target) {
   ensureDir(target);
   for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) throw new Error(`Unexpected symlink in clean source: ${entry.name}`);
     if (entry.isDirectory() && excludedDirs.has(entry.name)) continue;
     if (entry.isFile() && excludedFiles.has(entry.name)) continue;
 
@@ -40,7 +48,7 @@ function copyTree(source, target) {
   }
 }
 
-function run(command, args, cwd) {
+function run(command, args, cwd, env = process.env) {
   return new Promise((resolve, reject) => {
     const isWindowsScript = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
     const child = spawn(isWindowsScript ? "cmd.exe" : command, isWindowsScript ? ["/d", "/c", command, ...args] : args, {
@@ -48,11 +56,23 @@ function run(command, args, cwd) {
       shell: false,
       stdio: "inherit",
       windowsHide: true,
+      env,
     });
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`${command} ${args.join(" ")} failed with ${code}`));
+    });
+  });
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const port = server.address().port;
+      server.close(() => resolve(port));
     });
   });
 }
@@ -66,9 +86,12 @@ async function main() {
   const npm = await resolveNpm();
   if (!npm) throw new Error("npm was not found");
 
-  await run(npm, ["ci"], cleanProject);
-  await run(npm, ["run", "check"], cleanProject);
-  await run(npm, ["test"], cleanProject);
+  const env = { ...process.env, SUNNY_TOWN_HOST: "127.0.0.1", SUNNY_TOWN_PORT: String(await freePort()) };
+  await run(npm, ["ci", ...(process.argv.includes("--offline") ? ["--offline"] : [])], cleanProject, env);
+  await run(npm, ["run", "check"], cleanProject, env);
+  await run(npm, ["run", "test:server"], cleanProject, env);
+  await run(npm, ["test"], cleanProject, env);
+  await run(npm, ["run", "verify:package"], cleanProject, env);
   console.log("Clean-source verification passed");
 }
 

@@ -1,0 +1,87 @@
+name: 问题反馈
+description: 报告启动、经营、存档、操作或画面问题。
+title: "[问题] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请描述实际发生的问题和复现步骤。截图、录屏和存档均为可选附件，没有附件也可以提交。
+  - type: input
+    id: game_version
+    attributes:
+      label: 游戏版本
+      description: 可在欢迎页或游戏界面查看。
+      placeholder: "例如：1.0.0-demo.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: run_method
+    attributes:
+      label: 运行方式
+      options:
+        - 发布压缩包（ZIP）
+        - 源码运行
+        - 其他方式
+    validations:
+      required: true
+  - type: input
+    id: operating_system
+    attributes:
+      label: 操作系统
+      placeholder: "例如：Windows 11；如方便可补充系统版本"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器及版本
+      placeholder: "例如：Chrome 或 Edge，以及浏览器版本号"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 从启动游戏或读取存档开始，写出触发问题的操作。
+      placeholder: |
+        1. 选择哪一种故事，或读取哪份存档
+        2. 建造、点击或调整了什么
+        3. 在哪一步出现问题
+    validations:
+      required: true
+  - type: textarea
+    id: actual_result
+    attributes:
+      label: 实际结果
+      description: 说明看到的现象；如果有错误文字，可直接粘贴。
+    validations:
+      required: true
+  - type: textarea
+    id: expected_result
+    attributes:
+      label: 预期结果
+      description: 你原本希望游戏怎样表现？
+    validations:
+      required: true
+  - type: input
+    id: town_state
+    attributes:
+      label: 城镇状态（可选）
+      placeholder: "例如：花园小镇、第 20 周、约 200 人；正在进行活动或祭典"
+  - type: textarea
+    id: performance_context
+    attributes:
+      label: 画面与性能情况（可选）
+      description: 画面或卡顿问题可补充窗口尺寸、画质设置、设备或显卡，以及是否从后台返回；不清楚的项目可以留空。
+      placeholder: |
+        窗口尺寸：
+        画面设置：省电 / 标准 / 流畅
+        出现时机：首次进入 / 建造后 / 长时间游玩 / 后台返回
+        设备或显卡：
+        CPU、内存或画面异常现象：
+        如果是开发验证，是否设置 SUNNY_TOWN_SOFTWARE_WEBGL=1：
+  - type: textarea
+    id: attachments
+    attributes:
+      label: 截图、录屏或存档（可选）
+      description: 如方便，可附截图或录屏；导出的 JSON 存档也可以压缩为 ZIP 后附加，帮助复现。附件不是必需的。

@@ -1,543 +1,125 @@
-# Codex 项目交接文档：阳光小镇物语
+# 项目交接：阳光小镇物语
 
-本文档用于下一次 Codex 或开发者接手项目时快速恢复上下文。它记录当前项目目标、技术环境、核心文件、最新道路/寻路/交通系统、测试方式、已知限制和后续建议。
+## 当前状态
 
-## 当前项目状态
+- 项目：`sunny-town-story`，中文桌面 3D 小镇经营游戏。
+- 当前版本：**`1.0.0-demo.3` 春日试玩版**。
+- 本轮目标：回应用户认为游戏「单调、无聊、粗糙」的反馈，大幅完善实际试玩体验，交付可分发的本地试玩包。
+- 技术：Python 静态服务、Three.js、原生 JavaScript / CSS、WebAudio、Playwright。
+- 主分支：`main`；仓库：[ZhongH1216/sunny-town-story](https://github.com/ZhongH1216/sunny-town-story)。
+- **demo.3 验收通过（2026-09-13）**：62 / 62 项浏览器回归、2 / 2 项服务与启动代理测试，干净源码及实际 ZIP 验证通过。软件图形后端与兼容限制见 [试玩发布说明](docs/DEMO_RELEASE_NOTES.md)。demo.2 的结果保留为历史。
 
-- 项目名：`sunny-town-story`
-- 中文名：阳光小镇物语
-- 类型：桌面端 3D 休闲城市经营游戏
-- 当前阶段：P4 收尾完成，下一步进入 P5 发布准备
-- 画风：日系阳光小镇、低多边形、奶油色 HUD、樱花和玩具感建筑
-- 技术：Python 静态服务 + Three.js + 原生 JavaScript + Playwright
-- 主分支：`main`
-- GitHub SSH：`git@github.com:ZhongH1216/sunny-town-story.git`
-- GitHub Web：`https://github.com/ZhongH1216/sunny-town-story`
+本轮已从原有 P5 RC 收尾转为试玩体验重做。旧 P0–P5 进度保留在 [开发计划](DEVELOPMENT_PLAN.md)；`docs/P5_RC_LOCK.md`、P5 QA 与素材提示词是旧阶段记录，其 RC 锁版限制和美术等待项不作为本轮执行要求。
 
-最近一次已知验证：
+## 用户偏好与本轮重点
+
+- 明亮、温暖、日式、休闲；中文优先，不做赛博界面与双语切换。
+- 有真实建设、服务与通勤关系，并通过居民心愿和选择提供继续游玩的动力。
+- 面向桌面键鼠和 16:9，固定 18 × 18 地图，不做移动端适配。
+- 用户本轮明确反馈 **CPU 占用过高**。继续工作时优先控制后台运行、帧率、场景绘制与内存，不同时启动多个浏览器验证进程。
+- 素材采用程序几何和现有 PNG。本轮没有替换成 AI 生成资产，不应把未来换图承诺写成已实现或发布前必做条件。
+
+## 本轮已实现内容
+
+### 试玩故事
+
+`src/demo.js` 管理三种开局：晴日港的春日来信、花见町的花园生活、日和街的商店街经营。各情景拥有不同资金、布局与目标。
+
+9 封居民来信覆盖水电、入住、就业、公园、学校、道路升级、消防、广场和建筑升级；玩家需要手动回信领取奖励与邮票。4 份市政提案提供不同财政、税收、幸福度和维护选择。收集 6 枚邮票并满足情景祭典清单、支付筹办费用后，可举办春日祭典，随后继续建设或重开另一段故事。
+
+旧五章主线、服务容量与道路可达、区位、城市事件、成就、升级和周报仍保留。试玩存档与自由建设存档的状态需要分开处理，不能让渲染过程自动发奖励或推进时间。
+
+### 四季活动与社区项目（demo.3）
+
+`src/town-life.js` 管理 4 种四季活动，每种 2 个方案，每季自愿参与一次。接受后 6 个模拟周内累计 2 或 3 周满足所选条件；只在周结算推进，暂停、渲染和加载不增加进度。完成后手动领取资金和口碑，已完成奖励会保留。
+
+口碑达到条件并支付预算后，可选择 3 个社区项目各自的 2 种永久方案之一。口碑不消耗，项目不可重复购买或叠加另一方案。首次成功各季活动收集共 4 件纪念品，集齐一次性获得 ¥5,000；最近活动记录限制为 12 条。
+
+### 模拟、存档与操作修复（demo.3）
+
+- 人口增长仅发生在周结算；建造、读取、普通统计重算不增加人口。
+- 建造撤销仅在本周有效，结算清空，不能倒回收入；活动与项目状态改变也会清理撤销，防止奖励回滚重领。
+- 存档校验拒绝重复建筑 ID 与非法道路等级，并在破坏当前城镇前拒绝无效输入。
+- 拖拽按整次手势的移动判断，修复慢拖镜头误建造。
+- 弹窗 `Esc` 取消恢复原状态；祭典存档读取后保持暂停等待继续；无试玩状态旧档清除上一故事的 UI 残留。
+
+### 场景和界面
+
+- `src/world-art.js` 添加海港环境及建筑细节，仍为可复现程序几何。
+- 欢迎页是海港明信片，包含三种故事、继续和返回入口。
+- 左侧保留全部工具；右侧分为「来信 / 活动 / 建设 / 周报」，常驻目标、下一步、居民需求、交通和选中格子；决策在来信前，页签保留各自滚动位置。
+- 鼠标拖拽平移、滚轮缩放；按住 `Shift` 拖动可连续铺路。
+- 交通图层用绿 / 红解释畅通与拥堵，服务图层显示水电完整或不足。
+- 建造预览、造价和失败原因悬浮提示、游戏内确认弹窗、祭典结算与反馈 Toast 已接入。
+- `src/interface.js` 只负责图标、分页、存档菜单与图例，不实现城市模拟。
+
+### 存档与启动
+
+- 存档版本仍为 v3，新增可选 `life` 字段，兼容旧 v1 / v2 / v3；缺少该字段时初始化空的街坊生活状态。自动与手动保存保留。
+- 顶栏存档管理支持 JSON 导出 / 导入，便于跨浏览器移动与问题复现。
+- 玩家启动入口 `start-sunny-town.bat` 只需要 Python 3.10+ 和桌面 WebGL 2 浏览器；发布 ZIP 已带 Three.js 运行文件，不需要 npm 或 Conda。
+- 源码开发仍需 npm 安装锁定依赖，可使用 `sunny-town-dev` Conda 环境。
+- 发布输出为 `dist/sunny-town-story-1.0.0-demo.3.zip`；必须同时包含 `three.module.js` 与其依赖 `three.core.js`。
+- 本地存档与浏览器、地址及端口绑定，更换端口会进入另一份存档空间。
+
+### CPU 与内存措施
+
+- 默认省电 24 帧；顶栏「存档管理 → 画面与耗电」可选标准 30 帧或流畅 60 帧，并保存设置。
+- 暂停时渲染上限 10 帧，菜单 / 阻塞弹层为 1 帧；页面隐藏时停止绘制与模拟并暂停音乐，返回后恢复。
+- 324 个草地格合并为一次绘制；道路仅在连接掩码等视觉状态变化时重建。
+- 寻路缓存最多 2,048 项，效果粒子最多 96 个，视觉移动体复用且保持数量上限。
+- 重建或拆除时释放局部几何资源；限制长期运行中的累积对象。
+- 取消游戏界面与弹层的大面积背景模糊；减少动态效果偏好已通过 CSS 支持。
+
+这些是已实现的控制手段，不是跨硬件性能通过证明。最终测量与限制应以本轮发布说明为准。
+
+## 核心文件与职责
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/app.js` | Three.js 主场景、模拟、道路网络 / 路由、输入、存档、设置、测试接口及试玩控制器桥接。 |
+| `src/demo.js` | 情景定义、9 封委托、4 个抉择、经济修正、故事进度、祭典、导入导出与弹层流程。 |
+| `src/town-life.js` | 四季自愿活动、3 项二选一永久项目、口碑、4 件纪念品与最多 12 条活动记录。 |
+| `src/world-art.js` | 海港环境和建筑表现。 |
+| `index.html` | 完整 DOM 契约；旧核心 ID 与 `data-tool` 被测试使用。 |
+| `src/styles.css`、`src/demo-ui.css` | 基础样式与春日试玩界面、响应式和弹层。 |
+| `src/interface.js` | 页签、图标、存档菜单、图层说明；通过 `window.sunnyTownUI.activatePanel()` 切换手帖。 |
+| `src/asset-manifest.js`、`assets/textures/` | 原有素材清单、PNG 与合成音频配置。 |
+| `app.py`、`scripts/find-python.bat` | 本地静态服务、玩家 Python 查找。 |
+| `tools/package-local.js`、`tools/verify-package.js` | 发行包构建与解压后的实际运行验证。 |
+| `tests/` | 原有系统及本轮试玩验证。 |
+
+## 开发与验证入口
 
 ```powershell
-npm.cmd test
-```
-
-预期：
-
-```text
-31 passed
-```
-
-## 用户偏好和需求背景
-
-用户最初想要“超级炫酷的展示”，后来明确不喜欢赛博深色风格和资源调度玩法，要求改成：
-
-- 可爱、日式、阳光、休闲风格
-- 类似城市天际线，但休闲化
-- 中文优先，不需要中英切换
-- 不做移动端适配
-- 目标桌面 16:9 大屏
-- 增加真正的玩法内核和动画细节
-
-当前版本已经完全移除旧版赛博指挥中心、雷达、告警、双语切换和调度动作，改为阳光小镇经营游戏。
-
-## 运行环境
-
-当前项目已完成 P0 环境去机器绑定。运行环境要求：
-
-- 工作目录：`D:\python project\sunny-town-story`
-- Shell：PowerShell
-- 推荐 conda 环境：`sunny-town-dev`
-- Python：`C:\Python\anaconda3\envs\sunny-town-dev\python.exe`
-- Node/npm：`C:\Python\anaconda3\envs\sunny-town-dev\node.exe` / `npm.cmd`
-- Git：`C:\Program Files\Git\cmd\git.exe`，当前 PowerShell 中 `git` 不一定在 PATH
-
-注意：
-
-- `git` 不一定在 PowerShell PATH 中，建议使用完整路径：
-
-```powershell
-& "C:\Program Files\Git\cmd\git.exe" status
-```
-
-- `package.json`、`tools/run-tests.js`、`tools/start-server.js` 已不再绑定旧的 `aigo` Python 路径。
-- Python 解析逻辑集中在 `tools/env.js`。
-- 项目会优先读取 `.env` 或系统环境变量里的 `SUNNY_TOWN_PYTHON`，否则自动尝试 `py -3`、`python`、`python3`。
-- 如果 Python 不在 PATH 中，复制 `.env.example` 为 `.env` 并填写本机路径。
-- 新电脑推荐直接运行 `.\scripts\setup-dev.bat`，它会创建/更新 `sunny-town-dev`、安装 npm 依赖和 Playwright Chromium。
-- 如浏览器下载较慢，可先执行 `.\scripts\setup-dev.bat --skip-browsers`，之后再运行 `npm.cmd run install:browsers`。
-- 当前已验证：`npm.cmd run check`、`npm.cmd run assets:textures`、`npm.cmd run test:visual` 和 `npm.cmd test` 通过，完整测试预期 `31 passed`。普通沙箱中启动 Playwright Chromium 可能报 `spawn EPERM`，这是运行权限限制，不是项目测试失败。
-- Windows PowerShell 直接 `Get-Content` 中文 UTF-8 文件时可能显示乱码，但浏览器、GitHub 和测试按 UTF-8 正常渲染。
-
-## 核心文件
-
-### `app.py`
-
-Python 标准库静态服务器。
-
-职责：
-
-- 从项目根目录提供静态文件
-- 默认监听 `127.0.0.1:8765`
-- 使用 `ReusableThreadingTCPServer` 允许端口复用
-
-### `index.html`
-
-游戏 DOM 骨架。
-
-包含：
-
-- `#scene` Three.js canvas
-- 顶部城市指标 HUD
-- 左侧建造工具栏
-- 普通道路 / 樱花大道道路模式切换
-- 音乐、静音、音量、撤销、回中、缩放和快捷键提示控件
-- 右侧城市顾问、交通概况、选中地块信息
-- 底部时间、速度、暂停、当前工具提示
-
-当前所有可见文案均为中文。
-
-### `src/styles.css`
-
-桌面 HUD 和视觉样式。
-
-当前设计：
-
-- 明亮天空蓝背景
-- 奶油色面板
-- 草地绿、樱花粉、温暖橙、清水蓝
-- 桌面固定 HUD
-- `min-width: 1180px`
-- `min-height: 760px`
-
-不做移动端布局。
-
-### `src/app.js`
-
-核心游戏逻辑和 Three.js 场景。
-
-代码区块大致包括：
-
-- 常量配置：网格尺寸、每周秒数、初始资金、最大移动体数
-- `ROAD_TIERS`：普通道路和樱花大道的成本、维护费、容量、颜色和速度
-- `BUILDINGS`：建筑成本、维护、税收、容量、岗位、服务、污染
-- `city`：全局城市状态、地块、建筑、居民、视觉移动体、寻路缓存、道路版本号、章节、成就、事件、设置和撤销栈
-- `src/asset-manifest.js`：P4 贴图、音效和音乐循环清单
-- Three.js 场景：相机、灯光、地块、道路、建筑、树、云、樱花、移动体、气泡
-- 资源加载：PNG 像素贴图优先，失败后回退到运行时 canvas 贴图
-- 道路系统：`roadTier`、`roadMask`、道路 mesh、自动连接刷新
-- 寻路系统：A*、路径缓存、居民路线分配
-- 交通系统：道路流量、容量、拥堵率、交通评分
-- 建造/拆除/升级/撤销：`place`、`bulldoze`、`upgradeSelectedBuilding`、`undoLastAction`、`canBuild`
-- 模拟结算：`computeStats`、`advanceWeek`
-- UI 渲染：`renderUI`、`advisorMessages`、`selectedDescription`
-- 交互：工具选择、道路等级选择、地图点击、拖拽平移、滚轮缩放、镜头回中、快捷键、音量设置
-- 测试接口：`window.sunnyTownTest`，仅 `?test=1` 暴露
-
-### `src/asset-manifest.js`
-
-P4 资源清单。
-
-包含：
-
-- `textures`：住宅、商业、工业、服务建筑和地标的 PNG 路径、调色板和标签
-- `audioCues`：UI、建造、道路、拆除、升级、周报、章节和警告音效参数
-- `musicLoop`：WebAudio 背景音乐循环参数
-- `assetManifestSummary()`：测试和调试用摘要
-
-### `docs/ASSET_PIPELINE.md`
-
-像素贴图和 AI 辅助资源制作流程。
-
-当前 checked-in PNG 是可复现占位资产。后续替换最终美术时保持 `src/asset-manifest.js` 的 id 和路径稳定，再运行视觉回归即可。
-
-### `tests/smoke.spec.js`
-
-Playwright 测试。
-
-当前覆盖：
-
-- 1440 x 900 页面和 3D canvas 渲染
-- 交通 HUD 和道路等级按钮可见
-- 普通道路与樱花大道均可放置
-- 樱花大道容量高于普通道路
-- 道路 mask 正确表示直线、转角、T 字和十字
-- 住宅到商业/工业可寻路时，居民路线、人口、税收和移动体正常
-- 断路时出现不可达通勤顾问提示
-- 大量通勤使普通道路拥堵并降低交通评分
-- 视觉移动体数量不超过 60
-- P1 存档、章节、成就、升级和手动保存
-- P2 地标、章节奖励、周报趋势、复合解锁、升级规则、新手任务链和 200 周通关
-- P3 服务道路可达、容量压力、区位收益、财政压力和 300 周长局稳定性
-- P4 音频设置、资源清单、快捷键、撤销、镜头控制和表现动效
-
-### `tests/visual.spec.js`
-
-Playwright 视觉回归测试。
-
-当前覆盖：
-
-- 1440 x 900 桌面断点
-- 1366 x 768 桌面断点
-- 核心 HUD、建造栏、顾问栏、底部栏和 WebGL canvas 可见
-- 输出 `test-results/visual-1440x900.png` 和 `test-results/visual-1366x768.png`
-
-### `tools/generate-textures.js`
-
-P4 资源生成脚本。
-
-职责：
-
-- 读取 `src/asset-manifest.js`
-- 按调色板生成确定性的 16 x 16 PNG 占位贴图
-- 写入 `assets/textures/buildings/` 和 `assets/textures/landmarks/`
-
-### `tools/run-tests.js`
-
-测试 runner。
-
-职责：
-
-- 使用 `tools/env.js` 解析 Python 后启动 `app.py`
-- 等待配置的本地 URL，默认 `http://127.0.0.1:8765`
-- 调用本地 Playwright CLI
-- 测试结束后关闭服务进程
-
-### `tools/start-server.js`
-
-后台启动本地服务。
-
-当前输出已修正为：
-
-```text
-Started Sunny Town Story at http://127.0.0.1:8765
-```
-
-更推荐开发时使用前台：
-
-```powershell
-npm.cmd run serve
-```
-
-### `start-sunny-town.bat` / `启动阳光小镇.bat`
-
-给用户双击使用的一键启动入口。
-
-职责：
-
-- 自动切换到项目根目录
-- 检查 Node/npm/Python，必要时自动复用 `sunny-town-dev`
-- 如果 conda 存在但 `sunny-town-dev` 不存在，自动调用 `scripts\setup-dev.bat --skip-browsers` 创建基础开发环境
-- 如果缺少 `node_modules`，自动执行 `npm.cmd install`
-- 自动打开 `http://127.0.0.1:8765`
-- 使用解析到的 Python 前台运行 `app.py`，窗口关闭或 `Ctrl+C` 后服务随之结束
-- 启动失败时停在窗口里显示错误，避免双击后窗口瞬间消失
-
-实现注意：
-
-- 真实逻辑放在纯 ASCII 的 `start-sunny-town.bat`。
-- `启动阳光小镇.bat` 只负责 `call start-sunny-town.bat`。
-- 不要把复杂中文提示写进 `.bat` 的括号代码块里；cmd 在不同代码页下容易把 UTF-8 中文拆成半截命令。
-- `stop-sunny-town.bat` / `停止阳光小镇.bat` 用于结束旧版后台服务或清理占用 `8765` 端口的进程。
-- `stop-sunny-town.bat` 会先读 `server.pid`，再按配置端口兜底查杀监听进程。
-
-## 数据结构摘要
-
-地块 `city.tiles[]`：
-
-```js
-{
-  x,
-  z,
-  type,
-  buildingId,
-  road,
-  roadTier,        // null | "lane" | "avenue"
-  roadMask,        // 北=1，东=2，南=4，西=8
-  trafficLoad,
-  trafficCapacity,
-  congestion,
-  coverage,
-  pollution
-}
-```
-
-建筑 `city.buildings[]`：
-
-```js
-{
-  id,
-  type,
-  x,
-  z,
-  mesh,
-  active
-}
-```
-
-居民 `city.residents[]`：
-
-```js
-{
-  id,
-  homeId,
-  destinationId,
-  route,
-  commuteTime,
-  happiness
-}
-```
-
-其他交通相关状态：
-
-```js
-city.visualAgents
-city.pathCache
-city.roadVersion
-city.stats.traffic
-city.stats.averageCongestion
-city.stats.unreachableResidents
-city.stats.averageCommute
-```
-
-## 游戏规则摘要
-
-地图：
-
-- 固定 18 x 18 网格
-- 非道路建筑必须贴近道路
-- 道路可相邻自动连接
-
-道路：
-
-- `lane`：普通道路，成本低、容量低
-- `avenue`：樱花大道，成本高、容量高，并提供少量幸福度加成
-- 建造或拆除道路会递增 `city.roadVersion` 并清空 `city.pathCache`
-- 每条道路记录 `trafficLoad`、`trafficCapacity`、`congestion`
-
-寻路：
-
-- A* 只在道路格上运行
-- 路径从“住宅邻近道路格”到“商业/工业邻近道路格”
-- 使用曼哈顿启发
-- 找不到路线时返回 `null`
-- 路径缓存 key 包含道路版本号、起点和终点
-
-居民：
-
-- 模拟层为每个居民保留对象
-- 每周根据住宅、人口和目的地重新分配路线
-- 有路线的居民贡献就业、税收和道路流量
-- 无路线的居民降低就业率、幸福度和顾问评分
-
-交通：
-
-- 居民路线经过的每条道路都会增加流量
-- `congestion = trafficLoad / trafficCapacity`，上限为 2
-- 全城平均拥堵越高，交通评分越低
-- 交通评分影响幸福度和收入效率
-
-视觉：
-
-- 移动体来自真实居民路线采样
-- 最多显示 60 个
-- 长路线显示小车，短路线显示行人
-- 拥堵时移动速度下降
-- 道路拥堵较高时显示暖色覆盖层
-
-目标：
-
-- 人口 >= 800
-- 幸福度 >= 75%
-- 资金 > 0
-
-达成后显示“阳光小镇已成型”，但可继续游玩。
-
-## 测试接口
-
-访问：
-
-```text
-http://127.0.0.1:8765/?test=1
-```
-
-会暴露：
-
-```js
-window.sunnyTownTest
-```
-
-接口：
-
-```js
-window.sunnyTownTest.place(type, x, z, options)
-window.sunnyTownTest.advanceWeek(count)
-window.sunnyTownTest.saveGame(manual)
-window.sunnyTownTest.loadSave(snapshot)
-window.sunnyTownTest.serializeGame()
-window.sunnyTownTest.startNewGame(options)
-window.sunnyTownTest.upgradeSelectedBuilding()
-window.sunnyTownTest.findPathByRoads(start, end)
-window.sunnyTownTest.getState()
-window.sunnyTownTest.upgradeState(x, z)
-window.sunnyTownTest.setMoney(amount)
-window.sunnyTownTest.setSettings(settings)
-window.sunnyTownTest.undo()
-```
-
-示例：
-
-```js
-window.sunnyTownTest.place("road", 3, 3, { tier: "avenue" });
-window.sunnyTownTest.place("residential", 3, 4);
-window.sunnyTownTest.advanceWeek(6);
-window.sunnyTownTest.getState();
-```
-
-`getState()` 返回：
-
-- `stats`
-- `week`
-- `chapterIndex`
-- `saveStatus`
-- `settings`
-- `assetManifest`
-- `assetRuntime`
-- `effectCount`
-- `musicEnabled`
-- `undoDepth`
-- `camera`
-- `selectedTool`
-- `selectedRoadTier`
-- `roadVersion`
-- `buildingCount`
-- `residentCount`
-- `visualAgentCount`
-- `roadCount`
-- `roads`
-- `residents`
-- `messages`
-- `advisor`
-
-## 常用命令
-
-运行：
-
-```powershell
-.\start-sunny-town.bat
-```
-
-或：
-
-```powershell
-cd "D:\python project\sunny-town-story"
-npm.cmd run serve
-```
-
-环境检查：
-
-```powershell
+.\scripts\setup-dev.bat
+conda activate sunny-town-dev
+npm.cmd ci
 npm.cmd run check
-```
-
-测试：
-
-```powershell
-npm.cmd test
-```
-
-Git 状态：
-
-```powershell
-& "C:\Program Files\Git\cmd\git.exe" status --short --branch
-```
-
-提交：
-
-```powershell
-& "C:\Program Files\Git\cmd\git.exe" add .
-& "C:\Program Files\Git\cmd\git.exe" commit -m "..."
-```
-
-推送：
-
-```powershell
-& "C:\Program Files\Git\cmd\git.exe" push
-```
-
-## Git 和忽略规则
-
-`.gitignore` 当前排除：
-
-```text
-node_modules/
-test-results/
-playwright-report/
-__pycache__/
-*.pyc
-debug.log
-.env
-```
-
-不要提交：
-
-- `node_modules`
-- `test-results`
-- `debug.log`
-- `__pycache__`
-- `.env`
-
-## 已知问题和注意事项
-
-1. 地图大小固定，暂无随机地图或扩展地图。
-2. 当前 PNG 贴图为可复现占位资产，最终 AI 辅助或手工美术替换仍留到 P5 前资源制作。
-3. 建筑、车辆、居民、道路和粒子仍主要由 Three.js 基础几何体组合，建筑表面已优先加载项目内 PNG 像素贴图并保留 canvas 回退；暂未引入 GLTF 模型。
-4. 当前模拟是休闲化 V1，数值模型强调可演示和反馈清晰，不追求真实城市级复杂度。
-5. P4 已做桌面视觉回归，移动端仍不作为目标平台，不要为了小屏牺牲桌面 HUD。
-6. 60 分钟以上人工 QA、满图性能基线和最终发布包仍属于 P5。
-
-## 推荐后续任务
-
-高优先级：
-
-- 完成 P5 QA：新游戏、继续游戏、坏存档、章节通关、极端城市、长期运行和低性能设备。
-- 替换当前占位 PNG 为最终 AI 辅助或手工像素贴图，并保持 `src/asset-manifest.js` 路径稳定。
-- 完成 README 玩家说明、游戏内帮助页、版本号、更新日志和已知问题。
-
-中优先级：
-
-- 做满图、满居民、满移动体性能基线，必要时优化材质、移动体和 UI 刷新。
-- 补充存档导入/导出文件和坏存档 UI 恢复提示。
-- 评估离线发布包；默认 1.0 前仍保持桌面浏览器本地运行。
-
-低优先级：
-
-- 随机地图种子。
-- 截图导出。
-- 英文语言支持。
-- Electron/Tauri 桌面包装。
-
-## 接手建议
-
-下一位 Codex 接手时，建议先运行：
-
-```powershell
-npm.cmd test
-```
-
-再打开：
-
-```powershell
 npm.cmd run serve
 ```
 
-重点观察：
+Python / 端口配置见 `.env.example` 与 `tools/env.js`。不要把开发机的绝对解释器路径写入共享启动脚本。
 
-- 3D 小镇是否正常显示
-- 道路等级按钮是否可切换
-- 道路是否能自动形成直线、转角、T 字和十字
-- 住宅、商业、工业之间是否有小车或行人移动
-- 拥堵路段是否出现暖色覆盖
-- 顾问面板是否根据断路、拥堵、缺电、缺水、服务容量和财政压力实时更新
-- 背景音乐、音效、静音、撤销、镜头回中和缩放是否正常
-- `npm.cmd run test:visual` 的 1440 x 900 与 1366 x 768 截图是否无明显遮挡
+```powershell
+npm.cmd test
+npm.cmd run test:visual
+npm.cmd run package:local
+npm.cmd run verify:package
+```
 
-任何改动完成后都要重新运行 `npm.cmd test`。
+本轮 demo.3 干净源码验收通过：`npm ci --offline`、环境检查、62 / 62 项浏览器回归（单 worker，2.9 分钟）、2 / 2 项服务及启动代理测试。实际 ZIP 的 53 个文件通过校验，启程、存档、场景与推进读档均通过。三情景按正常收入和可见界面完成祭典，分别为第 52 / 35 / 65 周。具体结果与 SwiftShader 验证后端限制见 [试玩发布说明](docs/DEMO_RELEASE_NOTES.md)。
+
+demo.2 历史验收：45 / 45 项 Playwright、1 项服务安全、干净源码与 ZIP 通过，额外 3 项性能复验通过。该版正常经济在第 52 周完成祭典、回信 6 封，无额外资金注入；本轮人口和结算规则已修正，应重新验证而不沿用通关周数。
+
+浏览器验证仍按需串行，结束后关闭临时进程。只编辑文档时不运行浏览器；测试截图、报告、依赖与发行包保持为本地产物。
+`?test=1` 下暴露 `window.sunnyTownTest`，并跳过玩家欢迎页。玩家流程还需要普通入口验证，不能只用测试模式通过来代替真实开局。发布验证要针对 ZIP 实际解压目录，而不仅是源码服务器。
+
+## 接续工作
+
+1. 当前交付包为 `dist/sunny-town-story-1.0.0-demo.3.zip`；后续代码变更后应重新构建并验证。
+2. 收集真实玩家的难度、可读性和节奏反馈，特别是不同硬件上的 CPU 与响应表现。
+3. 延续单浏览器串行验证方式；后续改动根据影响范围复验存档、正常经济和实际发行包入口。
+4. 问题报告应包含版本、浏览器、周数、复现步骤，必要时附截图和导出存档。
+
+目前仍限制为 18 × 18 桌面本地浏览器游戏，不含移动适配、随机地图或原生安装器。隐藏 / 恢复与资源边界已有自动化回归，但不应宣称所有低性能设备、长时间人工试玩与独立新机验收已经完成，也不应虚构 CPU 降低百分比。没有用户授权时，不自动提交或推送仓库。
