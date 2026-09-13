@@ -155,7 +155,9 @@ npm.cmd run verify:clean -- --offline
 
 ## GitHub 验证与预发布
 
-仓库的 [验证与发布工作流](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml) 在面向 `main` 的 Pull Request 和手动运行时执行验收；推送 `v` 开头、与 `package.json` 版本一致的标签时，还会发布试玩预发布。
+仓库的 [验证与发布工作流](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml) 在 `main` 提交、面向 `main` 的 Pull Request 和手动运行时执行验收；推送 `v` 开头、与 `package.json` 版本一致的标签时，还会发布试玩预发布。
+
+云端浏览器任务使用 line / JUnit / GitHub 三种报告器，累计 3 项失败即停止、总测试限时 10 分钟，为 15 分钟作业预算内的诊断上传留出时间。`tests/boot.spec.js` 在启动失败时输出页面异常、缺失资源与 WebGL 状态，避免只有后续交互超时。失败或未运行的用例仍会阻止发布，不自动重试或跳过失败断言。
 
 工作流使用 Windows、Node.js 22、Python 3.12 和显式 SwiftShader，依次安装锁定依赖与浏览器、检查环境、依次运行服务、场景几何及浏览器测试，再验证实际 ZIP。只有全部通过，独立发布作业才上传 ZIP 和 SHA-256 校验文件，并发布 [版本说明](GITHUB_RELEASE.md)。普通验证只有读取仓库的权限；发布作业使用 GitHub 内置临时令牌，无需保存个人令牌。
 

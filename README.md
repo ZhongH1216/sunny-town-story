@@ -8,7 +8,7 @@
 
 [试玩版本与下载](https://github.com/ZhongH1216/sunny-town-story/releases) · [开发源码](https://github.com/ZhongH1216/sunny-town-story/tree/main) · [反馈问题](https://github.com/ZhongH1216/sunny-town-story/issues)
 
-**分发状态：demo.4 已通过本地干净源码和实际 ZIP 验收，GitHub 下载附件尚未发布。** 可用附件以版本列表实际内容为准；目前也可按[开发指南](docs/DEVELOPMENT.md)运行源码。
+**分发状态：demo.4 已通过本地干净源码和实际 ZIP 验收，GitHub 下载附件尚未发布。** 首次云端浏览器回归失败，发布已停止，正在补充诊断；可用附件以版本列表实际内容为准。目前也可按[开发指南](docs/DEVELOPMENT.md)运行源码。
 
 ![demo.4 实机画面：原创低多边形海岛、住宅与商店组成晴日港。](docs/images/demo-4-town.png)
 

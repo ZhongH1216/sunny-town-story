@@ -8,6 +8,7 @@
 - 技术：Python 静态服务、Three.js、原生 JavaScript / CSS、WebAudio、Playwright。
 - 仓库：[ZhongH1216/sunny-town-story](https://github.com/ZhongH1216/sunny-town-story)。demo.3 云端发布未成功；demo.4 尚未发布下载附件，不能把本地 ZIP 或标签当作 GitHub Release 已上线。
 - demo.4 已确认：83 项 Playwright 任务通过（68 浏览器 + 15 街区纯计算）、3 项美术 Node、2 项服务 Node；干净源码离线安装 / check / 实际 ZIP 通过。最后的小屏紧凑布局又通过 4 项 creative 回归，源代码已冻结。
+- 2026-09-14：`2b01e29` 与 `v1.0.0-demo.4` 已推送；首次云端任务 `34767230535` 浏览器回归失败，包验证和发布被跳过。后续增加主分支验收、公开失败注释、连续失败上限和启动诊断；新增启动测试本地单独通过，未改动游戏代码。不能把本地结果标成云端通过。
 
 旧 P0–P5 记录保留在 [开发计划](DEVELOPMENT_PLAN.md)。`docs/P5_RC_LOCK.md`、P5 QA 与素材提示词是历史资料，旧 RC 锁版限制不适用于本轮重做。
 
@@ -85,7 +86,7 @@ npm.cmd run verify:package
 
 包名由 package.json 决定，当前为 `dist/sunny-town-story-1.0.0-demo.4.zip`，同时生成 `.zip.sha256`。构建递归复制 src，并显式检查街区、观景、合批模块和三份 CSS；完整 Three.js 运行依赖必须包括 three.module.js 和 three.core.js。最终验收必须针对 ZIP 解压目录，不能只验证源码服务。
 
-GitHub 工作流支持 PR / 手动验收与版本标签发布；云端全部验证通过后，独立发布作业才创建带两个附件的草稿、检查完整性并公开。已有 Release 不覆盖，失败应查明原因，不能在文档里提前宣布上线。
+GitHub 工作流支持 main 提交 / PR / 手动验收与版本标签发布；云端全部验证通过后，独立发布作业才创建带两个附件的草稿、检查完整性并公开。已有 Release 不覆盖，失败应查明原因，不能在文档里提前宣布上线。
 
 ## 验证记录与下一步
 
