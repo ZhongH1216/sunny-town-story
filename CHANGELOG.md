@@ -2,7 +2,7 @@
 
 ## 1.0.0-demo.3 · 四季街坊生活（2026-09-13）
 
-这是本仓库首次通过 GitHub Releases 分发的试玩预发布，包含此前的春日故事改造与本次四季扩展。
+本版准备作为本仓库首次通过 GitHub Releases 分发的试玩预发布，包含此前的春日故事改造与本次四季扩展。附件状态以仓库首页和版本列表为准。
 
 ### 玩法与呈现
 
@@ -27,7 +27,7 @@ Windows 桌面验收：62 项浏览器回归与 2 项服务 / 启动代理测试
 
 玩家需要 Python 3.10+ 和支持 WebGL 2 的桌面浏览器；Python 不随 ZIP 分发。存档版本仍为 v3，兼容旧 v1 / v2 / v3。
 
-[下载此版](https://github.com/ZhongH1216/sunny-town-story/releases/tag/v1.0.0-demo.3) · [完整发布说明与验收边界](docs/DEMO_RELEASE_NOTES.md)
+[版本列表与附件](https://github.com/ZhongH1216/sunny-town-story/releases) · [完整发布说明与验收边界](docs/DEMO_RELEASE_NOTES.md)
 
 ## 1.0.0-demo.2 · 春日故事（2026-09-13，本地迭代）
 

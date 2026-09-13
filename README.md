@@ -6,7 +6,9 @@
 
 [![验证与发布](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml/badge.svg)](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml)
 
-[下载试玩 ZIP](https://github.com/ZhongH1216/sunny-town-story/releases/download/v1.0.0-demo.3/sunny-town-story-1.0.0-demo.3.zip) · [版本发布页](https://github.com/ZhongH1216/sunny-town-story/releases/tag/v1.0.0-demo.3) · [GitHub 仓库](https://github.com/ZhongH1216/sunny-town-story) · [反馈问题](https://github.com/ZhongH1216/sunny-town-story/issues)
+[试玩发布与下载](https://github.com/ZhongH1216/sunny-town-story/releases) · [版本源码](https://github.com/ZhongH1216/sunny-town-story/tree/v1.0.0-demo.3) · [反馈问题](https://github.com/ZhongH1216/sunny-town-story/issues)
+
+**分发状态：源码和版本标签已同步，试玩 ZIP 已完成本地验收，GitHub 下载附件尚待发布。** 附件上线后可在上方版本列表获取；目前可按[开发指南](docs/DEVELOPMENT.md)运行源码。
 
 ![晴日港实机画面：樱花道路串起住宅、店铺与社区设施，右侧手帖记录祭典进度。](docs/images/demo-3-harbor.png)
 
@@ -30,7 +32,7 @@
 
 需要 **Python 3.10+**、支持 **WebGL 2 的桌面浏览器**和键盘鼠标。本版以 Windows、16:9 桌面屏幕为主要运行环境，不提供移动端适配。
 
-1. 从上方下载试玩 ZIP，**完整解压**到一个文件夹。
+1. 试玩附件发布后，从上方版本列表下载 ZIP，**完整解压**到一个文件夹。
 2. 安装好 Python 后，双击 `start-sunny-town.bat`（或 `启动阳光小镇.bat`）。
 3. 浏览器打开 `http://127.0.0.1:8765/`，选择故事，开始旅程。
 4. 游玩时保留服务器窗口；结束时在该窗口按 `Ctrl+C`，或运行 `stop-sunny-town.bat`。
