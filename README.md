@@ -2,13 +2,13 @@
 
 在海风与樱花之间，规划一条街道、认识几位邻居，把居民的来信变成小镇的日常。一款中文桌面 3D 小镇经营游戏。
 
-**街区灵感试玩版 · `1.0.0-demo.4.1` · 本地试玩包验收通过**
+**街区灵感试玩版 · `1.0.0-demo.4.1` · 已发布试玩**
 
 [![验证与发布](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml/badge.svg)](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml)
 
 [试玩版本与下载](https://github.com/ZhongH1216/sunny-town-story/releases) · [开发源码](https://github.com/ZhongH1216/sunny-town-story/tree/main) · [反馈问题](https://github.com/ZhongH1216/sunny-town-story/issues)
 
-**试玩下载以[版本列表](https://github.com/ZhongH1216/sunny-town-story/releases)中实际可用的 ZIP 附件为准。** demo.4.1 修复暂停读档后的界面刷新，并加强启动检测；云端全部回归和实际 ZIP 验收通过后才公开附件。源码运行方法见[开发指南](docs/DEVELOPMENT.md)。
+**[下载 Windows 试玩 ZIP](https://github.com/ZhongH1216/sunny-town-story/releases/download/v1.0.0-demo.4.1/sunny-town-story-1.0.0-demo.4.1.zip)** · [版本说明与 SHA-256](https://github.com/ZhongH1216/sunny-town-story/releases/tag/v1.0.0-demo.4.1)。完整解压后双击 `start-sunny-town.bat`，需要 Python 3.10+；玩家无需 Node.js / npm。源码运行方法见[开发指南](docs/DEVELOPMENT.md)。
 
 ![demo.4 实机画面：原创低多边形海岛、住宅与商店组成晴日港。](docs/images/demo-4-town.png)
 
@@ -45,7 +45,7 @@ demo.4 加入「街区灵感」：公园靠近住宅、商店围绕广场、学�
 
 需要 **Python 3.10+**、支持 **WebGL 2 的桌面浏览器**和键盘鼠标。本版以 Windows、16:9 桌面屏幕为主要运行环境，不提供移动端适配。
 
-1. 试玩附件发布后，从版本列表下载 ZIP，**完整解压**到一个文件夹。
+1. 从上方下载链接或版本列表下载 ZIP，**完整解压**到一个文件夹。
 2. 安装好 Python 后，双击 `start-sunny-town.bat`（或 `启动阳光小镇.bat`）。
 3. 浏览器打开 `http://127.0.0.1:8765/`，选择故事，开始旅程。
 4. 游玩时保留服务器窗口；结束时在该窗口按 `Ctrl+C`，或运行 `stop-sunny-town.bat`。
@@ -80,7 +80,7 @@ macOS / Linux 可尝试在解压目录运行 `python3 app.py`，但尚未完成�
 
 地图固定为 **18 × 18**，运行时场景使用 Three.js 程序几何与顶点颜色，音乐和音效使用 WebAudio。旧 PNG 仅保留为历史素材生产源，已不再预加载到新场景。本版没有地图扩张、随机地图、多人联机或原生安装器。
 
-demo.4.1 自动化覆盖 **84 项 Playwright 任务（69 项浏览器回归 + 15 项街区纯计算）**，另有 **3 项美术几何与资源测试、9 项服务与启动代理测试**。2026-09-16 本地回归与专项复验通过，干净源码离线依赖安装和环境检查成功；实际 ZIP 解压后 78 个文件校验通过，正常入口启程、保存与读档正常，没有页面异常或资源加载失败。完整记录见[试玩说明](docs/DEMO_RELEASE_NOTES.md)。三个故事均使用正常经营收入完成祭典，没有额外注资。
+2026-09-16，demo.4.1 的 **84 项云端 Playwright 回归全部通过（69 项浏览器回归 + 15 项街区纯计算）**，另有 **3 项美术几何与资源测试、9 项服务与启动代理测试通过**。实际 ZIP 解压后 78 个文件校验通过，正常入口启程、保存与读档正常，没有页面异常或资源加载失败。公开附件已重新下载并核对 SHA-256。[发布验证记录](docs/RELEASE_VERIFICATION.md)包含对应任务和校验值。三个故事均使用正常经营收入完成祭典，没有额外注资。
 
 本轮浏览器验收显式使用 SwiftShader 软件渲染，本机默认 ANGLE 曾出现 SharedImage 创建失败。游戏不强制软件渲染，软件后端通过不代表硬件兼容问题已解决，也不等于所有电脑能达到相同帧率。完整记录与正常经济结果见[发布说明](docs/DEMO_RELEASE_NOTES.md)。
 

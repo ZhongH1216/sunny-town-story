@@ -3,10 +3,10 @@
 ## 当前状态
 
 - 项目：`sunny-town-story`，中文桌面 3D 小镇经营游戏；主分支 `main`。
-- 当前版本：**`1.0.0-demo.4.1` 街区灵感修复版本，本地试玩包验收通过，等待云端发布**。
+- 当前版本：**`1.0.0-demo.4.1` 街区灵感修复版本，已发布，云端完整验收与公开附件下载校验通过**。
 - 本轮重点：回应游戏单调、粗糙的反馈，让建筑位置形成可解释的组合，重制低多边形场景，并保留 CPU / 内存控制。
 - 技术：Python 静态服务、Three.js、原生 JavaScript / CSS、WebAudio、Playwright。
-- 仓库：[ZhongH1216/sunny-town-story](https://github.com/ZhongH1216/sunny-town-story)。demo.3 云端发布未成功；demo.4 尚未发布下载附件，不能把本地 ZIP 或标签当作 GitHub Release 已上线。
+- 仓库：[ZhongH1216/sunny-town-story](https://github.com/ZhongH1216/sunny-town-story)。当前 [demo.4.1 试玩已发布](https://github.com/ZhongH1216/sunny-town-story/releases/tag/v1.0.0-demo.4.1)；此前 demo.3 / demo.4 未发布附件。
 - demo.4 已确认：83 项 Playwright 任务通过（68 浏览器 + 15 街区纯计算）、3 项美术 Node、2 项服务 Node；干净源码离线安装 / check / 实际 ZIP 通过。最后的小屏紧凑布局又通过 4 项 creative 回归，源代码已冻结。
 - 2026-09-14：`2b01e29` 与 `v1.0.0-demo.4` 已推送；首次云端任务 `34767230535` 浏览器回归失败，包验证和发布被跳过。后续增加主分支验收、公开失败注释、连续失败上限和启动诊断；新增启动测试本地单独通过，未改动游戏代码。不能把本地结果标成云端通过。
 
@@ -102,3 +102,5 @@ GitHub 工作流支持 main 提交 / PR / 手动验收与版本标签发布；�
 ## 2026-09-16 收尾
 
 84 项回归均已得到通过结果：干净源码完整运行通过 83 项，暂停帧率名义采样窗口出现边界失败；随后修正为页内真实经过时间并等待交互过渡，5 项性能回归全通过。未改游戏帧率上限或隐藏零帧要求。9 项服务 / 启动器与 3 项美术 Node 测试通过。完整日志 `dist/demo4-1-release-clean.log` 保留失败原记录，性能复验见 `dist/demo4-1-performance-verification.md`。云端改为 3 片各 28 项，全部通过后才验证实际 ZIP；最终 ZIP 已通过解压后的 78 文件清单 / 哈希、正常 UI 启程保存、推进读档、版本和服务退出检查，无页面异常或失败资源，日志 `dist/demo4-1-final-package.log`。准备提交、推送 main 与新标签后检查实际 Release 附件。
+
+发布已完成：标签 `v1.0.0-demo.4.1` 对应 `5aa2595e9ed17010720cf09d52e1db750b09dd62`；云端三个分片 84 项全部通过，实际 ZIP 与发布作业成功。公开 ZIP 和 SHA-256 均已下载核验，详见 [发布验证记录](docs/RELEASE_VERIFICATION.md)。后续只更新主分支文档，不移动标签或覆盖附件。GitHub About 侧栏仍需要账号网页登录 / 管理接口权限；当前 SSH 可同步代码但不能设置该字段。
