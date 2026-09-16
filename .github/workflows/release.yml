@@ -23,12 +23,17 @@ defaults:
     shell: pwsh
 
 jobs:
-  build:
-    name: Windows 验收与打包
+  validate:
+    name: Windows 分片验收 (${{ matrix.shard }}/3)
     runs-on: windows-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       SUNNY_TOWN_SOFTWARE_WEBGL: "1"
+      SUNNY_TOWN_SHARD: ${{ matrix.shard }}
       PLAYWRIGHT_JUNIT_OUTPUT_FILE: dist/ci-diagnostics/playwright-results.xml
     steps:
       - name: 读取源码
@@ -74,41 +79,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: 检查开发环境
+        if: matrix.shard == 1
         run: |
           npm.cmd run check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: 验证服务与启动脚本
+        if: matrix.shard == 1
         run: |
           npm.cmd run test:server
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: 验证场景几何与资源释放
+        if: matrix.shard == 1
         run: |
           npm.cmd run test:art
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: 完整浏览器回归
+      - name: 浏览器回归分片
         run: |
-          # Stop repeated failures early so screenshots and reports can still upload.
-          npm.cmd test -- --reporter=line,junit,github --max-failures=3 --global-timeout=600000 --output=dist/ci-diagnostics/test-results
+          # 测试级分片避免 smoke 大文件挤在同一片；显式 serial 测试组仍保持顺序。
+          # 每台运行器只有一个浏览器工作进程，不减少测试或放宽断言/超时。
+          npm.cmd test -- --fully-parallel --workers=1 "--shard=$env:SUNNY_TOWN_SHARD/3" --reporter=line,junit,github --max-failures=3 --global-timeout=600000 --output=dist/ci-diagnostics/test-results
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: 验证实际试玩压缩包
-        run: |
-          npm.cmd run verify:package
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: 上传通过验收的试玩包
-        uses: actions/upload-artifact@v7
-        with:
-          name: demo-release-package
-          path: |
-            dist/${{ steps.package.outputs.basename }}.zip
-            dist/${{ steps.package.outputs.basename }}.zip.sha256
-          if-no-files-found: error
-          compression-level: 0
-          overwrite: true
 
       - name: 收集测试截图与结果
         if: always()
@@ -131,9 +124,85 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: demo-validation-diagnostics
+          name: demo-validation-diagnostics-shard-${{ matrix.shard }}
+          path: dist/ci-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+  build:
+    name: Windows 试玩包验收
+    # 矩阵三片必须全部通过；第 1 片还包含 check、服务和美术 Node 门禁。
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      SUNNY_TOWN_SOFTWARE_WEBGL: "1"
+    steps:
+      - name: 读取源码
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 配置 Python
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: 配置 Python 路径并检查版本标签
+        id: package
+        env:
+          SUNNY_SETUP_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          "SUNNY_TOWN_PYTHON=$env:SUNNY_SETUP_PYTHON" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $package = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+          if ($package.name -cne 'sunny-town-story' -or $package.version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw '包名或版本格式不正确。'
+          }
+          if ($env:GITHUB_REF -like 'refs/tags/*' -and $env:GITHUB_REF_NAME -cne ('v' + $package.version)) {
+            throw "标签 $env:GITHUB_REF_NAME 必须严格等于 v$($package.version)。"
+          }
+          "basename=$($package.name)-$($package.version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: 安装锁定依赖
+        run: |
+          npm.cmd ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 安装测试浏览器
+        run: |
+          npm.cmd run install:browsers
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 验证实际试玩压缩包
+        run: |
+          npm.cmd run verify:package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 上传通过验收的试玩包
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-release-package
           path: |
-            dist/ci-diagnostics/
+            dist/${{ steps.package.outputs.basename }}.zip
+            dist/${{ steps.package.outputs.basename }}.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
+      - name: 上传试玩包验证诊断
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-package-diagnostics
+          path: |
             dist/package-verification/*.json
             dist/package-verification/*.png
           if-no-files-found: ignore

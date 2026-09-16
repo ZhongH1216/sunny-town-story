@@ -32,7 +32,7 @@ const TILE_SIZE = 2.4;
 const WEEK_SECONDS = 4;
 const INITIAL_MONEY = 50000;
 const MAX_VISUAL_AGENTS = 60;
-const GAME_VERSION = "1.0.0-demo.4";
+const GAME_VERSION = "1.0.0-demo.4.1";
 const SAVE_VERSION = 3;
 const SAVE_KEY = "sunny-town-story.save.v1";
 const AUTO_SAVE_INTERVAL_WEEKS = 4;
@@ -1406,6 +1406,8 @@ function applySave(save) {
   city.lastSaveAt = migrated.savedAt || null;
   city.selectedTile = null;
   setViewMode(city.demo?.view || 'normal');
+  // A load is complete only when its values are visible, including while paused.
+  renderUI();
   return true;
 }
 

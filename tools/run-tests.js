@@ -1,32 +1,28 @@
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
-const http = require("node:http");
 const path = require("node:path");
 const { root, pythonAppCommand, spawnSpec } = require("./env");
+const { probeGameServer } = require("./test-server-probe");
 
 let serverUrl = "http://127.0.0.1:8765";
 
-function waitForServer(deadlineMs = 15000) {
+function rejectUnexpectedServer(result) {
+  throw new Error(`Refusing to use the service at ${serverUrl}: ${result.reason}. The existing service was left untouched; select another SUNNY_TOWN_PORT if needed.`);
+}
+
+async function waitForServer(checkProcess, deadlineMs = 15000) {
   const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const probe = () => {
-      const req = http.get(serverUrl, (res) => {
-        res.resume();
-        resolve();
-      });
-      req.on("error", () => {
-        if (Date.now() - started > deadlineMs) {
-          reject(new Error(`Server did not respond at ${serverUrl}`));
-          return;
-        }
-        setTimeout(probe, 250);
-      });
-      req.setTimeout(1000, () => {
-        req.destroy();
-      });
-    };
-    probe();
-  });
+  while (Date.now() - started < deadlineMs) {
+    checkProcess();
+    const remaining = deadlineMs - (Date.now() - started);
+    if (remaining <= 0) break;
+    const result = await probeGameServer(serverUrl, { timeoutMs: Math.min(1000, remaining) });
+    if (result.state === "ready") return;
+    if (result.state === "rejected") rejectUnexpectedServer(result);
+    await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(0, deadlineMs - (Date.now() - started)))));
+  }
+  checkProcess();
+  throw new Error(`Game server did not become ready at ${serverUrl} within ${deadlineMs} ms`);
 }
 
 function run(command, args, options = {}) {
@@ -56,39 +52,37 @@ async function main() {
   }
 
   let server = null;
-  const serverAlreadyRunning = await new Promise((resolve) => {
-    const req = http.get(serverUrl, (res) => {
-      res.resume();
-      resolve(true);
-    });
-    req.on("error", () => resolve(false));
-    req.setTimeout(1000, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-
-  if (!serverAlreadyRunning) {
-    const appSpec = spawnSpec(app.command, app.args);
-    server = spawn(appSpec.command, appSpec.args, {
-      cwd: root,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-
-    server.stdout.on("data", (chunk) => process.stdout.write(chunk));
-    server.stderr.on("data", (chunk) => process.stderr.write(chunk));
-  }
+  const existing = await probeGameServer(serverUrl);
+  if (existing.state === "rejected") rejectUnexpectedServer(existing);
 
   try {
-    await waitForServer();
+    if (existing.state === "unavailable") {
+      const appSpec = spawnSpec(app.command, app.args);
+      server = spawn(appSpec.command, appSpec.args, {
+        cwd: root,
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let startupError = null;
+      server.once("error", (error) => { startupError = error; });
+      server.stdout.on("data", (chunk) => process.stdout.write(chunk));
+      server.stderr.on("data", (chunk) => process.stderr.write(chunk));
+      await waitForServer(() => {
+        if (startupError) throw startupError;
+        if (server.exitCode !== null) throw new Error(`Game server exited before becoming ready (code ${server.exitCode})`);
+      });
+    } else {
+      console.log(`[ok] reusing verified game server at ${serverUrl}`);
+    }
     const code = await run(process.execPath, [playwrightCli, "test", "--config=playwright.config.js", ...process.argv.slice(2)], {
       env: { ...process.env, PLAYWRIGHT_SKIP_WEBSERVER: "1" },
     });
     process.exitCode = code;
   } finally {
-    if (server) server.kill();
+    // Never kill a reused or rejected listener: this handle only exists when
+    // this invocation started its own Python process.
+    if (server && server.exitCode === null && !server.killed) server.kill();
   }
 }
 

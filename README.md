@@ -2,13 +2,13 @@
 
 在海风与樱花之间，规划一条街道、认识几位邻居，把居民的来信变成小镇的日常。一款中文桌面 3D 小镇经营游戏。
 
-**街区灵感试玩版 · `1.0.0-demo.4` · 本地验收通过**
+**街区灵感试玩版 · `1.0.0-demo.4.1` · 本地试玩包验收通过**
 
 [![验证与发布](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml/badge.svg)](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml)
 
 [试玩版本与下载](https://github.com/ZhongH1216/sunny-town-story/releases) · [开发源码](https://github.com/ZhongH1216/sunny-town-story/tree/main) · [反馈问题](https://github.com/ZhongH1216/sunny-town-story/issues)
 
-**分发状态：demo.4 已通过本地干净源码和实际 ZIP 验收，GitHub 下载附件尚未发布。** 首次云端浏览器回归失败，发布已停止，正在补充诊断；可用附件以版本列表实际内容为准。目前也可按[开发指南](docs/DEVELOPMENT.md)运行源码。
+**试玩下载以[版本列表](https://github.com/ZhongH1216/sunny-town-story/releases)中实际可用的 ZIP 附件为准。** demo.4.1 修复暂停读档后的界面刷新，并加强启动检测；云端全部回归和实际 ZIP 验收通过后才公开附件。源码运行方法见[开发指南](docs/DEVELOPMENT.md)。
 
 ![demo.4 实机画面：原创低多边形海岛、住宅与商店组成晴日港。](docs/images/demo-4-town.png)
 
@@ -80,7 +80,7 @@ macOS / Linux 可尝试在解压目录运行 `python3 app.py`，但尚未完成�
 
 地图固定为 **18 × 18**，运行时场景使用 Three.js 程序几何与顶点颜色，音乐和音效使用 WebAudio。旧 PNG 仅保留为历史素材生产源，已不再预加载到新场景。本版没有地图扩张、随机地图、多人联机或原生安装器。
 
-2026-09-13，demo.4 的 **83 项 Playwright 任务通过（68 项浏览器回归 + 15 项街区纯计算）**，另有 **3 项美术几何与资源测试、2 项服务与启动代理测试通过**。干净源码离线安装、环境检查和实际 ZIP 验收通过；普通入口可启程、保存并显示场景，验证未发现页面异常或资源加载失败。三个故事均使用正常经营收入完成祭典，没有额外注资。
+demo.4.1 自动化覆盖 **84 项 Playwright 任务（69 项浏览器回归 + 15 项街区纯计算）**，另有 **3 项美术几何与资源测试、9 项服务与启动代理测试**。2026-09-16 本地回归与专项复验通过，干净源码离线依赖安装和环境检查成功；实际 ZIP 解压后 78 个文件校验通过，正常入口启程、保存与读档正常，没有页面异常或资源加载失败。完整记录见[试玩说明](docs/DEMO_RELEASE_NOTES.md)。三个故事均使用正常经营收入完成祭典，没有额外注资。
 
 本轮浏览器验收显式使用 SwiftShader 软件渲染，本机默认 ANGLE 曾出现 SharedImage 创建失败。游戏不强制软件渲染，软件后端通过不代表硬件兼容问题已解决，也不等于所有电脑能达到相同帧率。完整记录与正常经济结果见[发布说明](docs/DEMO_RELEASE_NOTES.md)。
 

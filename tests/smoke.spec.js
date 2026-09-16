@@ -1033,11 +1033,12 @@ test("manual saves unlock an achievement and update save status", async ({ page 
 });
 
 test("P5 RC version and in-game help are visible and controllable", async ({ page }) => {
+  const version = require('../package.json').version;
   await page.goto("/?test=1");
   let after = await state(page);
-  expect(after.version).toBe("1.0.0-demo.4");
+  expect(after.version).toBe(version);
   expect(after.saveVersion).toBe(3);
-  await expect(page.locator("#versionLabel")).toContainText("1.0.0-demo.4");
+  await expect(page.locator("#versionLabel")).toHaveText(version);
   await expect(page.locator("#helpOverlay")).not.toBeVisible();
 
   await page.locator("#helpButton").click();
@@ -1050,7 +1051,7 @@ test("P5 RC version and in-game help are visible and controllable", async ({ pag
   await expect(page.locator("#helpOverlay")).toContainText("升级与成长");
   await expect(page.locator("#helpOverlay")).toContainText("存档");
   await expect(page.locator("#helpOverlay")).toContainText("快捷键");
-  await expect(page.locator("#helpVersion")).toContainText("1.0.0-demo.4");
+  await expect(page.locator("#helpVersion")).toHaveText(version);
 
   await page.keyboard.press("Escape");
   after = await state(page);

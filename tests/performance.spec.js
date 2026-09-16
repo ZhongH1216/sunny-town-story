@@ -21,36 +21,65 @@ test('new towns default to balanced 30 fps, pause lowers it, and hidden pages st
   await page.goto('/?test=1');
   await page.waitForFunction(() => window.sunnyTownTest?.demo);
   const read = () => page.evaluate(() => window.sunnyTownTest.getState());
-  let before = await read();
-  expect(before.settings.performance).toBe('balanced');
-  expect(before.rendering.pixelRatio).toBeLessThanOrEqual(1.25);
-  await page.waitForTimeout(1500);
-  let after = await read();
-  expect(after.rendering.frames - before.rendering.frames).toBeLessThanOrEqual(48);
-  expect(after.rendering.frames - before.rendering.frames).toBeGreaterThan(0);
+  // Keep both observations and the clock in the page: CDP round trips and a
+  // delayed timer otherwise make a nominal one-second window longer in CI.
+  const sample = (durationMs) => page.evaluate(async (duration) => {
+    const snapshot = () => {
+      const state = window.sunnyTownTest.getState();
+      return {
+        now: performance.now(), frames: state.rendering.frames,
+        targetFps: state.rendering.targetFps, hidden: state.rendering.hidden,
+        paused: state.paused, week: state.week, weekProgress: state.weekProgress,
+      };
+    };
+    const before = snapshot();
+    await new Promise(resolve => setTimeout(resolve, duration));
+    const after = snapshot();
+    return { before, after, elapsedMs: after.now - before.now, frames: after.frames - before.frames };
+  }, durationMs);
+  const expectCapped = (measured, fps) => {
+    // An arbitrary sampling window can include one partial frame interval.
+    // The rate remains 30/10 fps; the budget follows actual elapsed time.
+    const frameBudget = Math.floor(measured.elapsedMs * fps / 1000) + 1;
+    const detail = `${measured.frames} frames over ${measured.elapsedMs.toFixed(1)} ms at ${fps} fps (budget ${frameBudget})`;
+    expect(measured.before.targetFps, detail).toBe(fps);
+    expect(measured.after.targetFps, detail).toBe(fps);
+    expect(measured.frames, detail).toBeGreaterThan(0);
+    expect(measured.frames, detail).toBeLessThanOrEqual(frameBudget);
+    console.log(`[render acceptance] ${detail}`);
+  };
+  const initial = await read();
+  expect(initial.settings.performance).toBe('balanced');
+  expect(initial.rendering.pixelRatio).toBeLessThanOrEqual(1.25);
+  await page.waitForFunction(() => window.sunnyTownTest.getState().rendering.targetFps === 30);
+  expectCapped(await sample(1500), 30);
   await page.locator('#pauseButton').click();
-  await page.waitForTimeout(180);
-  before = await read();
-  await page.waitForTimeout(1000);
-  after = await read();
-  expect(after.rendering.targetFps).toBe(10);
-  expect(after.rendering.frames - before.rendering.frames).toBeLessThanOrEqual(12);
+  // Pointer interaction intentionally boosts rendering for 220 ms. Observe
+  // the completed transition instead of sampling after only a fixed 180 ms.
+  await page.waitForFunction(() => {
+    const state = window.sunnyTownTest.getState();
+    return state.paused && state.rendering.targetFps === 10;
+  });
+  const paused = await sample(1000);
+  expectCapped(paused, 10);
+  expect(paused.before.paused).toBe(true);
+  expect(paused.after.paused).toBe(true);
   // Emulate the browser visibility transition without another rendering process.
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  before = await read();
-  await page.waitForTimeout(550);
-  after = await read();
-  expect(after.rendering.frames).toBe(before.rendering.frames);
-  expect(after.week).toBe(before.week);
-  expect(after.rendering.hidden).toBe(true);
+  const hidden = await sample(550);
+  expect(hidden.frames).toBe(0);
+  expect(hidden.after.week).toBe(hidden.before.week);
+  expect(hidden.after.weekProgress).toBe(hidden.before.weekProgress);
+  expect(hidden.before.hidden).toBe(true);
+  expect(hidden.after.hidden).toBe(true);
   await page.evaluate(() => {
     delete document.hidden;
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect.poll(async () => (await read()).rendering.frames).toBeGreaterThan(after.rendering.frames);
+  await expect.poll(async () => (await read()).rendering.frames).toBeGreaterThan(hidden.after.frames);
 });
 
 test('repeated town rebuilds release old graphics and keep effect counts bounded', async ({ page }) => {

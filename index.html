@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#f6f3e9" />
     <meta name="description" content="在海风与樱花之间，建一座有人情味的小镇。阳光小镇物语·春日试玩版。" />
     <title>阳光小镇物语 · 晴日港的春天</title>
-    <link rel="stylesheet" href="./src/styles.css?v=1.0.0-demo.4" />
-    <link rel="stylesheet" href="./src/demo-ui.css?v=1.0.0-demo.4" />
-    <link rel="stylesheet" href="./src/creative-ui.css?v=1.0.0-demo.4" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.0.0-demo.4.1" />
+    <link rel="stylesheet" href="./src/demo-ui.css?v=1.0.0-demo.4.1" />
+    <link rel="stylesheet" href="./src/creative-ui.css?v=1.0.0-demo.4.1" />
   </head>
   <body>
     <canvas id="scene" aria-label="阳光小镇 3D 建造地图"></canvas>
@@ -16,7 +16,7 @@
       <header class="top-hud">
         <section class="brand">
           <div class="brand-sun" aria-hidden="true">✳</div>
-          <div><p>HARU HARBOR · 晴日港</p><h1>阳光小镇物语</h1><small id="versionLabel">1.0.0-demo.4</small></div>
+          <div><p>HARU HARBOR · 晴日港</p><h1>阳光小镇物语</h1><small id="versionLabel">1.0.0-demo.4.1</small></div>
         </section>
         <section class="city-stats" aria-label="城市状态">
           <div class="stat-money"><span>城镇资金</span><strong id="money">¥50,000</strong></div>
@@ -116,7 +116,7 @@
         <section class="settings-strip" aria-label="音频和快捷键设置"><button id="muteButton" class="icon-button" type="button" title="静音 / 恢复" aria-label="静音或恢复声音">♪</button><button id="musicButton" class="icon-button active" type="button" title="背景音乐开关" aria-label="背景音乐开关">♫</button><label class="volume-control" title="主音量"><span>音量</span><input id="volumeSlider" type="range" min="0" max="100" value="45" aria-label="主音量" /></label><button id="shortcutHelpButton" class="icon-button" type="button" title="快捷键" aria-label="显示快捷键">?</button><button id="helpButton" class="icon-button" type="button" title="游戏帮助" aria-label="游戏帮助">i</button><small id="shortcutHint">1-4 工具 / B 拆除 / U 撤销 / V 速度 / C 回中 / +/- 缩放 / P 观景 / 空格暂停</small></section>
       </footer>
 
-      <section id="helpOverlay" class="help-overlay" aria-label="游戏帮助" aria-hidden="true"><article class="help-panel" role="dialog" aria-modal="false" aria-labelledby="helpTitle"><header><span id="helpVersion">1.0.0-demo.4</span><button id="helpCloseButton" type="button" title="关闭帮助">×</button></header><h2 id="helpTitle">晴日建设手册</h2><div class="help-grid"><section><h3>开局顺序</h3><p>先铺主街，再放住宅、商业或工业，最后补电力和水塔。建筑必须贴近道路才会运行。</p></section><section><h3>道路与通勤</h3><p>居民会沿道路去工作或消费。普通道路便宜，樱花大道容量更高，适合作为主干路。</p></section><section><h3>水电与服务</h3><p>电力、水塔、公园、学校、消防和地标都会通过半径、道路可达与容量影响住宅。</p></section><section><h3>升级与成长</h3><p>选择建筑后可升级。升级需要资金、幸福、服务或交通条件，详情会显示在格子信息里。</p></section><section><h3>存档</h3><p>小镇会自动保存，也可手动保存。菜单中的存档管理支持导出与导入文件。若本地存档损坏，游戏会提示并回到新游戏。</p></section><section><h3>快捷键</h3><p>1-4 选择基础工具，A 切换道路，B 拆除，U 或 Ctrl+Z 撤销，V 调速度，C 回中，空格暂停。撤销仅对本周建造有效，周结算后清除，不会倒回已结算收入。</p></section><section><h3>街坊活动与社区</h3><p>四季活动完全自愿。接受后有 6 个模拟周，累计 2 或 3 周满足所选条件即可完成。口碑解锁 3 项社区项目，每项可选 2 种永久方案；成功活动可收集四季纪念品。</p></section><section><h3>春日旅程</h3><p>从菜单选择不同开局，回应居民委托、做出市政决定，一起准备小镇的春日庆典。旅程结束后仍可继续建设。</p></section><section><h3>街区灵感</h3><p>公园邻里、商店街、学园小径和工坊街区会随布局升星。建造前查看预告，选择引导可定位中心和格距范围。每种主题首次成形可领 ¥600，游客收入随星级增加，全城最多 ¥250/周；拆除、断路和工业位置都会影响星级。</p></section><section><h3>观景</h3><p>按 P 隐藏界面、暂停小镇，拖拽和滚轮自由取景。Esc 返回建设，恢复进入前的暂停状态。</p></section><section><h3>观察小镇</h3><p>交通图层：绿畅通、红拥堵。服务图层：绿水电完整、红有缺口。点击建筑看详情，拖拽平移，Shift 拖拽连续铺路，滚轮缩放。</p></section></div><footer><strong>慢慢来，小镇会长大。</strong><p>照顾身边的居民，比盲目扩张更有用。水电、工作和畅通的道路，是幸福日常的第一步。</p></footer></article></section>
+      <section id="helpOverlay" class="help-overlay" aria-label="游戏帮助" aria-hidden="true"><article class="help-panel" role="dialog" aria-modal="false" aria-labelledby="helpTitle"><header><span id="helpVersion">1.0.0-demo.4.1</span><button id="helpCloseButton" type="button" title="关闭帮助">×</button></header><h2 id="helpTitle">晴日建设手册</h2><div class="help-grid"><section><h3>开局顺序</h3><p>先铺主街，再放住宅、商业或工业，最后补电力和水塔。建筑必须贴近道路才会运行。</p></section><section><h3>道路与通勤</h3><p>居民会沿道路去工作或消费。普通道路便宜，樱花大道容量更高，适合作为主干路。</p></section><section><h3>水电与服务</h3><p>电力、水塔、公园、学校、消防和地标都会通过半径、道路可达与容量影响住宅。</p></section><section><h3>升级与成长</h3><p>选择建筑后可升级。升级需要资金、幸福、服务或交通条件，详情会显示在格子信息里。</p></section><section><h3>存档</h3><p>小镇会自动保存，也可手动保存。菜单中的存档管理支持导出与导入文件。若本地存档损坏，游戏会提示并回到新游戏。</p></section><section><h3>快捷键</h3><p>1-4 选择基础工具，A 切换道路，B 拆除，U 或 Ctrl+Z 撤销，V 调速度，C 回中，空格暂停。撤销仅对本周建造有效，周结算后清除，不会倒回已结算收入。</p></section><section><h3>街坊活动与社区</h3><p>四季活动完全自愿。接受后有 6 个模拟周，累计 2 或 3 周满足所选条件即可完成。口碑解锁 3 项社区项目，每项可选 2 种永久方案；成功活动可收集四季纪念品。</p></section><section><h3>春日旅程</h3><p>从菜单选择不同开局，回应居民委托、做出市政决定，一起准备小镇的春日庆典。旅程结束后仍可继续建设。</p></section><section><h3>街区灵感</h3><p>公园邻里、商店街、学园小径和工坊街区会随布局升星。建造前查看预告，选择引导可定位中心和格距范围。每种主题首次成形可领 ¥600，游客收入随星级增加，全城最多 ¥250/周；拆除、断路和工业位置都会影响星级。</p></section><section><h3>观景</h3><p>按 P 隐藏界面、暂停小镇，拖拽和滚轮自由取景。Esc 返回建设，恢复进入前的暂停状态。</p></section><section><h3>观察小镇</h3><p>交通图层：绿畅通、红拥堵。服务图层：绿水电完整、红有缺口。点击建筑看详情，拖拽平移，Shift 拖拽连续铺路，滚轮缩放。</p></section></div><footer><strong>慢慢来，小镇会长大。</strong><p>照顾身边的居民，比盲目扩张更有用。水电、工作和畅通的道路，是幸福日常的第一步。</p></footer></article></section>
     </main>
 
     <section id="welcomeOverlay" class="welcome-overlay" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
@@ -136,13 +136,13 @@
           <button class="scenario-card" data-scenario="commerce" aria-pressed="false" type="button"><span class="scenario-number">03 / 街角小店正在招租</span><strong><i>⌂</i> 商店街物语</strong><p>为老街重新点亮招牌。<br />照顾生意，也照顾通勤的日常。</p><span class="scenario-tag">商街经营 · 财政挑战</span></button>
         </div>
         <footer class="welcome-actions"><div><b>带上好奇心就够了。</b><p>跟着街坊来信，慢慢认识你的小镇。</p></div><button id="continueDemoButton" class="secondary-button" type="button" hidden>继续我的小镇</button><button id="startDemoButton" class="primary-button" type="button">开始这段旅程 <span>↗</span></button></footer>
-      </article><p class="welcome-footnote">键鼠操作 · 本地自动保存 · 春日试玩版 1.0.0-demo.4</p>
+      </article><p class="welcome-footnote">键鼠操作 · 本地自动保存 · 春日试玩版 1.0.0-demo.4.1</p>
     </section>
     <div id="demoToast" class="demo-toast" aria-live="polite" role="status"></div>
     <section id="photoModeBar" class="photo-mode-bar" aria-label="观景模式" hidden><div><span>阳光小镇物语</span><strong>留住这一刻的晴日</strong><small>拖拽平移 · 滚轮缩放 · 时间已暂停</small></div><button id="photoModeExitButton" type="button">返回建设 <kbd>Esc</kbd></button></section>
     <dialog id="demoModal" class="demo-modal" aria-labelledby="demoModalTitle"><span class="modal-eyebrow">来自晴日建设课</span><h2 id="demoModalTitle"></h2><div id="demoModalText"></div><div id="demoModalActions" class="modal-actions"></div></dialog>
     <section id="demoFinale" class="demo-finale" role="dialog" aria-modal="true" aria-label="旅程完成" hidden><article><span class="finale-sun" aria-hidden="true">✳</span><p class="welcome-kicker">晴日港 · 春日纪念</p><h2>这一季，因为你而不同。</h2><p>从第一条街到万家灯火，<br />你把大家的小小心愿，变成了小镇的日常。</p><div id="demoFinaleSummary"></div><div class="finale-actions"><button id="keepPlayingButton" class="primary-button" type="button">继续照顾小镇</button><button id="replayDemoButton" class="secondary-button" type="button">开启另一段故事</button></div></article></section>
-    <script type="module" src="./src/interface.js?v=1.0.0-demo.4"></script>
-    <script type="module" src="./src/app.js?v=1.0.0-demo.4"></script>
+    <script type="module" src="./src/interface.js?v=1.0.0-demo.4.1"></script>
+    <script type="module" src="./src/app.js?v=1.0.0-demo.4.1"></script>
   </body>
 </html>

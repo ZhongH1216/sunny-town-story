@@ -80,7 +80,9 @@ npm.cmd test
 
 `test:art` 通过 Node 内置测试运行器检查模型几何、共享模板与资源释放，不创建浏览器；它会在 GitHub 工作流和干净源码验收的 `test:server` 后运行。
 
-**demo.4 当前记录：83 项 Playwright 任务通过（68 项浏览器回归 + 15 项街区纯计算），3 项美术几何 / 资源测试、2 项服务 / 启动代理测试通过；干净源码离线 npm 安装、环境检查与实际 ZIP 验收通过。** `tests/neighborhoods.spec.js` 不请求 page / browser fixture，用数据模块导入实际源码，单独执行无需启动浏览器。
+**demo.4.1 当前记录：** 84 项回归均有通过结果（完整干净源码先通过 83 项；帧率计时修正后 5 项性能专项通过），9 项服务 / 启动器与 3 项美术 Node 测试通过。初始完整命令的失败仍保留在 `dist/demo4-1-release-clean.log`，不把分段复验写成单次全绿；云端三个分片仍检查全部 84 项。
+
+**demo.4 历史记录：83 项 Playwright 任务通过（68 项浏览器回归 + 15 项街区纯计算），3 项美术几何 / 资源测试、2 项服务 / 启动代理测试通过；干净源码离线 npm 安装、环境检查与实际 ZIP 验收通过。** `tests/neighborhoods.spec.js` 不请求 page / browser fixture，用数据模块导入实际源码，单独执行无需启动浏览器。
 
 完整日志为本地 `dist/demo4-clean-verification.log`，该轮从干净源码构建的实际 ZIP 有 70 个文件且哈希全部一致。后续文档和展示截图变更后需重新构建交付 ZIP。历史 demo.3 数字保留在发布说明中，不用于替代本版记录；性能方法与对照结果见[性能报告](PERFORMANCE.md)。
 
@@ -157,8 +159,8 @@ npm.cmd run verify:clean -- --offline
 
 仓库的 [验证与发布工作流](https://github.com/ZhongH1216/sunny-town-story/actions/workflows/release.yml) 在 `main` 提交、面向 `main` 的 Pull Request 和手动运行时执行验收；推送 `v` 开头、与 `package.json` 版本一致的标签时，还会发布试玩预发布。
 
-云端浏览器任务使用 line / JUnit / GitHub 三种报告器，累计 3 项失败即停止、总测试限时 10 分钟，为 15 分钟作业预算内的诊断上传留出时间。`tests/boot.spec.js` 在启动失败时输出页面异常、缺失资源与 WebGL 状态，避免只有后续交互超时。失败或未运行的用例仍会阻止发布，不自动重试或跳过失败断言。
+云端将全部 84 项 Playwright 任务拆成三个测试级分片，各 28 项且没有重复或遗漏；显式 serial 测试组完整保留。每片只用一个 worker，使用 line / JUnit / GitHub 三种报告器，累计 3 项失败即停止、每片总测试限时 10 分钟，为 15 分钟作业预算内的诊断上传留出时间。`tests/boot.spec.js` 在启动失败时输出页面异常、缺失资源与 WebGL 状态，避免只有后续交互超时。失败或未运行的用例仍会阻止发布，不自动重试或跳过失败断言。本地完整验收仍串行执行，不增加本机浏览器并发。
 
-工作流使用 Windows、Node.js 22、Python 3.12 和显式 SwiftShader，依次安装锁定依赖与浏览器、检查环境、依次运行服务、场景几何及浏览器测试，再验证实际 ZIP。只有全部通过，独立发布作业才上传 ZIP 和 SHA-256 校验文件，并发布 [版本说明](GITHUB_RELEASE.md)。普通验证只有读取仓库的权限；发布作业使用 GitHub 内置临时令牌，无需保存个人令牌。
+工作流使用 Windows、Node.js 22、Python 3.12 和显式 SwiftShader。第 1 片另执行环境、服务与场景几何检查；三个分片全部通过后，独立构建作业才验证实际 ZIP 并上传 ZIP 和 SHA-256 校验文件。只有版本标签触发的发布作业能公开 [版本说明](GITHUB_RELEASE.md)及附件。普通验证只有读取仓库的权限；发布作业使用 GitHub 内置临时令牌，无需保存个人令牌。
 
 发布前同步 `package.json`、锁文件、README 下载链接和版本说明，再提交并推送版本标签。已经公开发布的标签与附件不覆盖；后续修复应使用新版本。构建或验证失败时，先在 Actions 中查看失败步骤和诊断附件。

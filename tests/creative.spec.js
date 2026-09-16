@@ -76,6 +76,9 @@ test('a saved neighborhood keeps its one-time reward and only pays visitors duri
   await page.waitForFunction(() => window.sunnyTownTest?.neighborhoods);
   await page.evaluate(() => {
     const game = window.sunnyTownTest;
+    // Loading must refresh the visible rating even while time is stopped.
+    // A later automatic week must not hide a stale load UI on faster machines.
+    if (!game.getState().paused) document.getElementById('pauseButton').click();
     const save = game.serializeGame();
     Object.assign(save.city, {
       demo: null, life: null, neighborhoods: null, population: 120, chapterIndex: 2,
@@ -86,7 +89,7 @@ test('a saved neighborhood keeps its one-time reward and only pays visitors duri
       ],
       tiles: Array.from({ length: 5 }, (_, i) => ({ x: 5 + i, z: 9, roadTier: 'lane' })),
     });
-    game.loadSave(save);
+    if (!game.loadSave(save)) throw new Error('Neighborhood fixture must be valid');
   });
   await page.locator('#neighborhoodOpenButton').click();
   await expect(page.locator('[data-journal-page=guide]')).toBeVisible();
